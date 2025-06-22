@@ -69,7 +69,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("Laravel Form Facade から HTMLタグ置換スクリプト v2")
+	fmt.Println("Laravel Form Facade から HTMLタグ置換スクリプト")
 	fmt.Println("使用方法: go run form_facade_replacer.go <ファイルパス|ディレクトリパス>")
 	fmt.Println()
 	fmt.Println("引数:")
@@ -80,8 +80,8 @@ func printUsage() {
 	fmt.Println(" -h, --help このヘルプメッセージを表示")
 	fmt.Println()
 	fmt.Println("例:")
-	fmt.Println(" go run form_facade_replacer.go resources/views/web")
-	fmt.Println(" go run form_facade_replacer.go resources/views/web/components/input_reason.blade.php")
+	fmt.Println(" go run form_facade_replacer.go resources/views/hoge")
+	fmt.Println(" go run form_facade_replacer.go resources/views/web/hoge/fuga.blade.php")
 }
 
 func processBladeFiles(config *ReplacementConfig) error {
@@ -221,7 +221,7 @@ func processFormOpen(content string) string {
 			}
 		}
 	}
-	
+
 	// actionが設定されなかった場合のみurl処理を実行
 	if action == "" {
 		// url処理 - 先読みアサーションを使わない方法に変更
@@ -451,20 +451,40 @@ func replaceFormLabel(text string) string {
 }
 
 func processFormLabel(params []string) string {
-	if len(params) < 2 {
+	if len(params) < 1 {
 		return ""
 	}
 
-	forAttr := strings.Trim(params[0], `'"`)
-	textParam := params[1]
+	name := strings.Trim(params[0], `'"`)
+	forAttr := name // デフォルトでは名前をfor属性に使用
+	textParam := ""
+
+	// パラメータ数に応じた処理
+	if len(params) == 1 {
+		textParam = fmt.Sprintf("'%s'", name)
+	} else {
+		textParam = params[1]
+	}
+
 	extraAttrs := ""
 	if len(params) > 2 {
 		attrs := params[2]
-		if classRe := regexp.MustCompile(`'class'\s*=>\s*'([^']+)'`); classRe.MatchString(attrs) {
-			extraAttrs += fmt.Sprintf(` class="%s"`, classRe.FindStringSubmatch(attrs)[1])
+
+		if forRe := regexp.MustCompile(`'for'\s*=>\s*'([^']+)'`); forRe.MatchString(attrs) {
+			forAttr = forRe.FindStringSubmatch(attrs)[1]
 		}
-		if idRe := regexp.MustCompile(`'id'\s*=>\s*'([^']+)'`); idRe.MatchString(attrs) {
-			extraAttrs += fmt.Sprintf(` id="%s"`, idRe.FindStringSubmatch(attrs)[1])
+
+		attrPatterns := map[string]string{
+			"class": `'class'\s*=>\s*'([^']+)'`,
+			"id":    `'id'\s*=>\s*'([^']+)'`,
+			"style": `'style'\s*=>\s*'([^']+)'`,
+		}
+
+		for attr, pattern := range attrPatterns {
+			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
+				value := re.FindStringSubmatch(attrs)[1]
+				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
+			}
 		}
 	}
 
