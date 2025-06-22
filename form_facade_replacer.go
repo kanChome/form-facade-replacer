@@ -42,7 +42,6 @@ func main() {
 
 	config.TargetPath = arg
 
-	// ファイルかディレクトリかを判定
 	info, err := os.Stat(config.TargetPath)
 	if err != nil {
 		log.Fatalf("エラー: '%s' が存在しません。", config.TargetPath)
@@ -51,7 +50,6 @@ func main() {
 	config.IsFile = !info.IsDir()
 
 	if config.IsFile {
-		// 単一ファイルの場合、.blade.phpかチェック
 		if !strings.HasSuffix(config.TargetPath, ".blade.php") {
 			log.Fatalf("エラー: '%s' は.blade.phpファイルではありません。", config.TargetPath)
 		}
@@ -81,16 +79,14 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("例:")
 	fmt.Println(" go run form_facade_replacer.go resources/views/hoge")
-	fmt.Println(" go run form_facade_replacer.go resources/views/web/hoge/fuga.blade.php")
+	fmt.Println(" go run form_facade_replacer.go resources/views/hoge/fuga.blade.php")
 }
 
 func processBladeFiles(config *ReplacementConfig) error {
 	if config.IsFile {
-		// 単一ファイルの処理
 		return processSingleFile(config, config.TargetPath)
 	}
 
-	// ディレクトリの再帰処理
 	return filepath.WalkDir(config.TargetPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -144,38 +140,16 @@ func replaceFormPatterns(filePath string) error {
 	}
 
 	text := string(content)
-
-	// 1. Form::open() の置換
 	text = replaceFormOpen(text)
-
-	// 2. Form::close() の置換
 	text = replaceFormClose(text)
-
-	// 3. Form::hidden() の置換
 	text = replaceFormHidden(text)
-
-	// 4. Form::button() の置換
 	text = replaceFormButton(text)
-
-	// 5. Form::textarea() の置換
 	text = replaceFormTextarea(text)
-
-	// 6. Form::label() の置換
 	text = replaceFormLabel(text)
-
-	// 7. Form::text() の置換
 	text = replaceFormText(text)
-
-	// 8. Form::number() の置換
 	text = replaceFormNumber(text)
-
-	// 9. Form::select() の置換
 	text = replaceFormSelect(text)
-
-	// 10. Form::checkbox() の置換
 	text = replaceFormCheckbox(text)
-
-	// 11. Form::Submit() の置換
 	text = replaceFormSubmit(text)
 
 	return os.WriteFile(filePath, []byte(text), 0644)
@@ -202,19 +176,17 @@ func processFormOpen(content string) string {
 	method := "GET"
 	extraAttrs := ""
 
-	// route処理 - 文字列形式と配列形式の両方に対応
-	// まず配列形式のroute（パラメータ付き）をチェック
+	// route処理: 文字列形式と配列形式の両方に対応
+	// 配列形式のroute（パラメータ付き）をチェック
 	paramRouteRe := regexp.MustCompile(`'route'\s*=>\s*\[\s*'([^']+)'\s*,\s*(\[[^\]]*\])`)
 	if paramMatches := paramRouteRe.FindStringSubmatch(content); len(paramMatches) > 2 {
-		// 配列パラメータを含む場合の処理
 		action = fmt.Sprintf("{{ route('%s', %s) }}", paramMatches[1], paramMatches[2])
 	} else {
-		// 次に配列形式のroute（パラメータなし）をチェック
+		// 配列形式のroute（パラメータなし）をチェック
 		arrayRouteRe := regexp.MustCompile(`'route'\s*=>\s*\[\s*'([^']+)'\s*\]`)
 		if arrayMatches := arrayRouteRe.FindStringSubmatch(content); len(arrayMatches) > 1 {
 			action = fmt.Sprintf("{{ route('%s') }}", arrayMatches[1])
 		} else {
-			// 最後に文字列形式のrouteをチェック
 			simpleRouteRe := regexp.MustCompile(`'route'\s*=>\s*'([^']+)'`)
 			if simpleMatches := simpleRouteRe.FindStringSubmatch(content); len(simpleMatches) > 1 {
 				action = fmt.Sprintf("{{ route('%s') }}", simpleMatches[1])
@@ -222,15 +194,11 @@ func processFormOpen(content string) string {
 		}
 	}
 
-	// actionが設定されなかった場合のみurl処理を実行
 	if action == "" {
-		// url処理 - 先読みアサーションを使わない方法に変更
 		urlRe := regexp.MustCompile(`'url'\s*=>\s*([^,\]]+)`)
 		if matches := urlRe.FindStringSubmatch(content); len(matches) > 1 {
 			urlVal := strings.TrimSpace(matches[1])
-			// route()関数の場合の特別処理
 			if strings.HasPrefix(urlVal, "route(") {
-				// 括弧のバランスを考慮してroute()の完全な関数呼び出しを抽出
 				routeFuncRe := regexp.MustCompile(`route\([^)]*(?:\([^)]*\)[^)]*)*\)`)
 				if routeMatch := routeFuncRe.FindString(content); routeMatch != "" {
 					action = fmt.Sprintf("{{ %s }}", routeMatch)
@@ -243,12 +211,10 @@ func processFormOpen(content string) string {
 		}
 	}
 
-	// method処理
 	if methodRe := regexp.MustCompile(`'method'\s*=>\s*'([^']+)'`); methodRe.MatchString(content) {
 		method = methodRe.FindStringSubmatch(content)[1]
 	}
 
-	// その他の属性処理
 	attrPatterns := map[string]string{
 		"target": `'target'\s*=>\s*'([^']+)'`,
 		"id":     `'id'\s*=>\s*'([^']+)'`,
@@ -262,7 +228,7 @@ func processFormOpen(content string) string {
 		}
 	}
 
-	// GETメソッドの場合はCSRF fieldを含めない
+	// GETメソッドの場合は不要なためCSRF fieldを含めない
 	if strings.ToUpper(method) == "GET" {
 		return fmt.Sprintf(`<form action="%s" method="%s"%s>`, action, method, extraAttrs)
 	} else {
@@ -285,7 +251,6 @@ func replaceFormClose(text string) string {
 }
 
 func replaceFormHidden(text string) string {
-	// マルチライン形式に対応するため(?s)フラグを追加
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::hidden\(\s*(.*?)\s*\)\s*\!\!\}`,
 		`(?s)\{\{\s*Form::hidden\(\s*(.*?)\s*\)\s*\}\}`,
@@ -294,7 +259,6 @@ func replaceFormHidden(text string) string {
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			// 括弧内のコンテンツを抽出
 			content := re.FindStringSubmatch(match)[1]
 			params := extractParamsAdvanced(content)
 			return processFormHidden(params)
@@ -314,16 +278,10 @@ func processFormHidden(params []string) string {
 		value = params[1]
 	}
 
-	// 文字列結合が含まれる場合は、Bladeの変数展開形式に変換
 	nameAttr := name
 	if strings.Contains(name, " . ") {
-		// 'reason[' . $contentsData['statusList']['CHANGE'] . ']' のようなパターンを
-		// reason[{{ $contentsData['statusList']['CHANGE'] }}] に変換
-		// 複数のパターンを試行
 		patterns := []string{
-			// シングルクォート区切りのパターン
 			`^'([^']*)'\\s*\\.\\s*([^'\\s]+(?:\\[[^\\]]*\\]\\[[^\\]]*\\])?)\\s*\\.\\s*'([^']*)'$`,
-			// より一般的なパターン
 			`^'([^']*)'\\s*\\.\\s*(.+?)\\s*\\.\\s*'([^']*)'$`,
 		}
 
@@ -351,7 +309,6 @@ func processFormHidden(params []string) string {
 }
 
 func replaceFormButton(text string) string {
-	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::button\(\s*(.*?)\s*,\s*\[\s*(.*?)\s*\]\s*\)\s*\!\!\}`,
 		`(?s)\{\{\s*Form::button\(\s*(.*?)\s*,\s*\[\s*(.*?)\s*\]\s*\)\s*\}\}`,
@@ -393,7 +350,6 @@ func processFormButton(textParam, attrs string) string {
 }
 
 func replaceFormTextarea(text string) string {
-	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
 		`(?s)\{\{\s*Form::textarea\(\s*'([^']+)'\s*,\s*([^,]*(?:\([^)]*\)[^,]*)*[^,]*)\s*,\s*\[(.*?)\]\s*\)\s*\}\}`,
 		`(?s)\{\!\!\s*Form::textarea\(\s*'([^']+)'\s*,\s*([^,]*(?:\([^)]*\)[^,]*)*[^,]*)\s*,\s*\[(.*?)\]\s*\)\s*\!\!\}`,
@@ -423,9 +379,11 @@ func processFormTextarea(name, value, attrs string) string {
 			matches := re.FindStringSubmatch(attrs)
 			var val string
 			if len(matches) > 2 && matches[2] != "" {
-				val = matches[2] // 数値の場合
+				// 数値の場合
+				val = matches[2]
 			} else {
-				val = matches[1] // 文字列の場合
+				// 文字列の場合
+				val = matches[1]
 			}
 			extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
 		}
@@ -459,7 +417,6 @@ func processFormLabel(params []string) string {
 	forAttr := name // デフォルトでは名前をfor属性に使用
 	textParam := ""
 
-	// パラメータ数に応じた処理
 	if len(params) == 1 {
 		textParam = fmt.Sprintf("'%s'", name)
 	} else {
@@ -629,7 +586,6 @@ func processFormSelect(params []string) string {
 		for attr, pattern := range attrPatterns {
 			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
 				value := re.FindStringSubmatch(attrs)[1]
-				// onChangeとonchangeは同じ属性として扱う
 				if attr == "onChange" || attr == "onchange" {
 					extraAttrs += fmt.Sprintf(` onchange="%s"`, value)
 				} else {
@@ -679,14 +635,10 @@ func processFormCheckbox(params []string) string {
 		checked = params[2]
 	}
 
-	// 配列形式の名前（例：status[]）かどうかをチェック
 	if strings.HasSuffix(name, "[]") {
-		// 配列形式の場合、in_array関数を使ってシンプルにチェック
-		// 値が配列に含まれていない場合やfalseの場合はチェックされない
 		return fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(in_array(%s, (array)%s)) checked @endif>`,
 			name, value, value, checked)
 	} else {
-		// 通常のcheckboxの場合
 		return fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(%s) checked @endif>`, name, value, checked)
 	}
 }
@@ -750,11 +702,8 @@ func processFormSubmit(params []string) string {
 }
 
 func extractParamsAdvanced(paramsStr string) []string {
-	// マルチライン形式のパラメータを解析
-	// 改行と空白を正規化
 	paramsStr = strings.ReplaceAll(paramsStr, "\n", " ")
 	paramsStr = strings.ReplaceAll(paramsStr, "\t", " ")
-	// 連続する空白を単一の空白に統一
 	re := regexp.MustCompile(`\s+`)
 	paramsStr = re.ReplaceAllString(paramsStr, " ")
 	paramsStr = strings.TrimSpace(paramsStr)
