@@ -693,31 +693,56 @@ func processFormCheckbox(params []string) string {
 
 func replaceFormSubmit(text string) string {
 	patterns := []string{
-		`\{\!\!\s*Form::Submit\(\s*'([^']+)'\s*,\s*\[([^\]]*)\]\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::Submit\(\s*'([^']+)'\s*,\s*\[([^\]]*)\]\s*\)\s*\}\}`,
+		`\{\!\!\s*Form::submit\(\s*([^}]+)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::submit\(\s*([^}]+)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			matches := re.FindStringSubmatch(match)
-			return processFormSubmit(matches[1], matches[2])
+			params := extractParams(re.FindStringSubmatch(match)[1])
+			return processFormSubmit(params)
 		})
 	}
 	return text
 }
 
-func processFormSubmit(textParam, attrs string) string {
-	extraAttrs := ""
-	attrPatterns := map[string]string{
-		"class": `'class'\s*=>\s*'([^']+)'`,
-		"id":    `'id'\s*=>\s*'([^']+)'`,
+func processFormSubmit(params []string) string {
+	if len(params) < 1 {
+		return ""
 	}
 
-	for attr, pattern := range attrPatterns {
-		if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-			value := re.FindStringSubmatch(attrs)[1]
-			extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
+	textParam := strings.Trim(params[0], `'"`)
+
+	if textParam == "null" {
+		textParam = ""
+	}
+
+	extraAttrs := ""
+	if len(params) > 1 {
+		attrs := params[1]
+
+		attrPatterns := map[string]string{
+			"class":    `'class'\s*=>\s*'([^']+)'`,
+			"id":       `'id'\s*=>\s*'([^']+)'`,
+			"style":    `'style'\s*=>\s*'([^']+)'`,
+			"onclick":  `'onclick'\s*=>\s*'([^']+)'`,
+			"disabled": `'disabled'\s*=>\s*'([^']*)'`,
+		}
+
+		for attr, pattern := range attrPatterns {
+			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
+				value := re.FindStringSubmatch(attrs)[1]
+				if attr == "disabled" {
+					if value == "" || value == "disabled" {
+						extraAttrs += " disabled"
+					} else {
+						extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
+					}
+				} else {
+					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
+				}
+			}
 		}
 	}
 
