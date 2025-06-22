@@ -70,7 +70,7 @@ func main() {
 
 func printUsage() {
 	fmt.Println("Laravel Form Facade から HTMLタグ置換スクリプト v2")
-	fmt.Println("使用方法: go run replace_form_final_v2.go <ファイルパス|ディレクトリパス>")
+	fmt.Println("使用方法: go run form_facade_replacer.go <ファイルパス|ディレクトリパス>")
 	fmt.Println()
 	fmt.Println("引数:")
 	fmt.Println(" ファイルパス 対象の.blade.phpファイル")
@@ -80,8 +80,8 @@ func printUsage() {
 	fmt.Println(" -h, --help このヘルプメッセージを表示")
 	fmt.Println()
 	fmt.Println("例:")
-	fmt.Println(" go run replace_form_final_v2.go resources/views/web")
-	fmt.Println(" go run replace_form_final_v2.go resources/views/web/components/input_reason.blade.php")
+	fmt.Println(" go run form_facade_replacer.go resources/views/web")
+	fmt.Println(" go run form_facade_replacer.go resources/views/web/components/input_reason.blade.php")
 }
 
 func processBladeFiles(config *ReplacementConfig) error {
