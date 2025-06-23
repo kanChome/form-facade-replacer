@@ -30,7 +30,7 @@ func TestReplaceFormOpen(t *testing.T) {
 		{
 			name:  "Form with class and id attributes",
 			input: `{!! Form::open(['route' => 'user.store', 'method' => 'POST', 'class' => 'user-form', 'id' => 'create-user']) !!}`,
-			expected: `<form action="{{ route('user.store') }}" method="POST" id="create-user" class="user-form">
+			expected: `<form action="{{ route('user.store') }}" method="POST" class="user-form" id="create-user">
 {{ csrf_field() }}`,
 		},
 		{
@@ -118,7 +118,7 @@ func TestReplaceFormOpen(t *testing.T) {
 		{
 			name:  "Double curly braces with all attributes",
 			input: `{{ Form::open(['route' => 'user.store', 'method' => 'POST', 'class' => 'form-control', 'id' => 'main-form', 'target' => '_self']) }}`,
-			expected: `<form action="{{ route('user.store') }}" method="POST" target="_self" id="main-form" class="form-control">
+			expected: `<form action="{{ route('user.store') }}" method="POST" class="form-control" id="main-form" target="_self">
 {{ csrf_field() }}`,
 		},
 	}
@@ -181,7 +181,7 @@ func TestProcessFormOpen(t *testing.T) {
 		{
 			name:  "Route with all attributes",
 			input: `'route' => 'user.store', 'method' => 'POST', 'class' => 'user-form', 'id' => 'create-user', 'target' => '_self'`,
-			expected: `<form action="{{ route('user.store') }}" method="POST" target="_self" id="create-user" class="user-form">
+			expected: `<form action="{{ route('user.store') }}" method="POST" class="user-form" id="create-user" target="_self">
 {{ csrf_field() }}`,
 		},
 		{

@@ -26,14 +26,19 @@ func TestFormCheckbox(t *testing.T) {
 			expected: `<input type="checkbox" name="newsletter" value="{{ yes }}" @if(false) checked @endif>`,
 		},
 		{
-			name:     "Checkbox with attributes (unsupported pattern)",
+			name:     "Checkbox with attributes",
 			input:    "{{ Form::checkbox('newsletter', 'yes', false, ['class' => 'form-check-input', 'id' => 'newsletter-check']) }}",
-			expected: `<input type="checkbox" name="newsletter" value="{{ yes }}" @if(false) checked @endif>`,
+			expected: `<input type="checkbox" name="newsletter" value="{{ yes }}" @if(false) checked @endif class="form-check-input" id="newsletter-check">`,
 		},
 		{
 			name:     "Checkbox with null checked value",
 			input:    "{{ Form::checkbox('terms', 1, null) }}",
 			expected: `<input type="checkbox" name="terms" value="{{ 1 }}" @if(null) checked @endif>`,
+		},
+		{
+			name:     "Checkbox with disabled attribute",
+			input:    "{{ Form::checkbox('newsletter', 'yes', false, ['class' => 'form-check-input', 'disabled' => 'disabled']) }}",
+			expected: `<input type="checkbox" name="newsletter" value="{{ yes }}" @if(false) checked @endif class="form-check-input" disabled>`,
 		},
 	}
 

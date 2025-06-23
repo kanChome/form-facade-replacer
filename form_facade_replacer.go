@@ -27,7 +27,6 @@ func main() {
 		FileCount:      0,
 	}
 
-	// コマンドライン引数の処理
 	if len(os.Args) < 2 {
 		fmt.Println("エラー: ファイルまたはディレクトリを指定してください。")
 		printUsage()
@@ -176,17 +175,18 @@ func processFormOpen(content string) string {
 	method := "GET"
 	extraAttrs := ""
 
-	// route処理: 文字列形式と配列形式の両方に対応
-	// 配列形式のroute（パラメータ付き）をチェック
+	// Laravel の route 指定は複数の形式があるため、優先順位に従って順次チェック
+	// まず配列形式のroute（パラメータ付き）をチェック: 'route' => ['user.store', ['id' => 1]]
 	paramRouteRe := regexp.MustCompile(`'route'\s*=>\s*\[\s*'([^']+)'\s*,\s*(\[[^\]]*\])`)
 	if paramMatches := paramRouteRe.FindStringSubmatch(content); len(paramMatches) > 2 {
 		action = fmt.Sprintf("{{ route('%s', %s) }}", paramMatches[1], paramMatches[2])
 	} else {
-		// 配列形式のroute（パラメータなし）をチェック
+		// 次に配列形式のroute（パラメータなし）をチェック: 'route' => ['user.index']
 		arrayRouteRe := regexp.MustCompile(`'route'\s*=>\s*\[\s*'([^']+)'\s*\]`)
 		if arrayMatches := arrayRouteRe.FindStringSubmatch(content); len(arrayMatches) > 1 {
 			action = fmt.Sprintf("{{ route('%s') }}", arrayMatches[1])
 		} else {
+			// 最後に文字列形式のroute: 'route' => 'user.index'
 			simpleRouteRe := regexp.MustCompile(`'route'\s*=>\s*'([^']+)'`)
 			if simpleMatches := simpleRouteRe.FindStringSubmatch(content); len(simpleMatches) > 1 {
 				action = fmt.Sprintf("{{ route('%s') }}", simpleMatches[1])
@@ -194,6 +194,7 @@ func processFormOpen(content string) string {
 		}
 	}
 
+	// route が見つからなかった場合のみ url 処理を実行（route が優先）
 	if action == "" {
 		urlRe := regexp.MustCompile(`'url'\s*=>\s*([^,\]]+)`)
 		if matches := urlRe.FindStringSubmatch(content); len(matches) > 1 {
@@ -215,20 +216,26 @@ func processFormOpen(content string) string {
 		method = methodRe.FindStringSubmatch(content)[1]
 	}
 
+	// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
+	// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
+	attrOrder := []string{"class", "id", "target"}
 	attrPatterns := map[string]string{
 		"target": `'target'\s*=>\s*'([^']+)'`,
 		"id":     `'id'\s*=>\s*'([^']+)'`,
 		"class":  `'class'\s*=>\s*'([^']+)'`,
 	}
 
-	for attr, pattern := range attrPatterns {
-		if re := regexp.MustCompile(pattern); re.MatchString(content) {
-			value := re.FindStringSubmatch(content)[1]
-			extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
+	for _, attr := range attrOrder {
+		if pattern, exists := attrPatterns[attr]; exists {
+			if re := regexp.MustCompile(pattern); re.MatchString(content) {
+				value := re.FindStringSubmatch(content)[1]
+				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
+			}
 		}
 	}
 
-	// GETメソッドの場合は不要なためCSRF fieldを含めない
+	// GETリクエストはCSRF攻撃の対象ではないため、CSRF トークンを含めない
+	// POST/PUT/PATCH/DELETE の場合のみ CSRF 保護が必要
 	if strings.ToUpper(method) == "GET" {
 		return fmt.Sprintf(`<form action="%s" method="%s"%s>`, action, method, extraAttrs)
 	} else {
@@ -309,12 +316,25 @@ func processFormHidden(params []string) string {
 }
 
 func replaceFormButton(text string) string {
-	patterns := []string{
+	singleParamPatterns := []string{
+		`(?s)\{\{\s*Form::button\(\s*'([^']*)'\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::button\(\s*'([^']*)'\s*\)\s*\!\!\}`,
+	}
+
+	for _, pattern := range singleParamPatterns {
+		re := regexp.MustCompile(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			matches := re.FindStringSubmatch(match)
+			return processFormButton(matches[1], "")
+		})
+	}
+
+	twoParamPatterns := []string{
 		`(?s)\{\!\!\s*Form::button\(\s*(.*?)\s*,\s*\[\s*(.*?)\s*\]\s*\)\s*\!\!\}`,
 		`(?s)\{\{\s*Form::button\(\s*(.*?)\s*,\s*\[\s*(.*?)\s*\]\s*\)\s*\}\}`,
 	}
 
-	for _, pattern := range patterns {
+	for _, pattern := range twoParamPatterns {
 		re := regexp.MustCompile(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			matches := re.FindStringSubmatch(match)
@@ -325,18 +345,34 @@ func replaceFormButton(text string) string {
 }
 
 func processFormButton(textParam, attrs string) string {
-	extraAttrs := ""
-	attrPatterns := map[string]string{
-		"type":    `'type'\s*=>\s*'([^']+)'`,
-		"onclick": `'onclick'\s*=>\s*'([^']+)'`,
-		"class":   `'class'\s*=>\s*'([^']+)'`,
-		"id":      `'id'\s*=>\s*'([^']+)'`,
+	if attrs == "" {
+		return fmt.Sprintf(`<button>{!! %s !!}</button>`, textParam)
 	}
 
-	for attr, pattern := range attrPatterns {
-		if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-			value := re.FindStringSubmatch(attrs)[1]
-			extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
+	extraAttrs := ""
+
+	// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
+	// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
+	attrOrder := []string{"type", "onclick", "class", "id", "disabled"}
+	attrPatterns := map[string]string{
+		"type":     `'type'\s*=>\s*'([^']+)'`,
+		"onclick":  `'onclick'\s*=>\s*'([^']+)'`,
+		"class":    `'class'\s*=>\s*'([^']+)'`,
+		"id":       `'id'\s*=>\s*'([^']+)'`,
+		"disabled": `'disabled'\s*=>\s*'([^']+)'`,
+	}
+
+	for _, attr := range attrOrder {
+		if pattern, exists := attrPatterns[attr]; exists {
+			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
+				value := re.FindStringSubmatch(attrs)[1]
+				// disabled属性はHTML5標準に従い値なしで出力
+				if attr == "disabled" {
+					extraAttrs += fmt.Sprintf(` %s`, attr)
+				} else {
+					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
+				}
+			}
 		}
 	}
 
@@ -350,12 +386,38 @@ func processFormButton(textParam, attrs string) string {
 }
 
 func replaceFormTextarea(text string) string {
-	patterns := []string{
+	singleParamPatterns := []string{
+		`(?s)\{\{\s*Form::textarea\(\s*'([^']*)'\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::textarea\(\s*'([^']*)'\s*\)\s*\!\!\}`,
+	}
+
+	for _, pattern := range singleParamPatterns {
+		re := regexp.MustCompile(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			matches := re.FindStringSubmatch(match)
+			return processFormTextarea(matches[1], "", "")
+		})
+	}
+
+	twoParamPatterns := []string{
+		`(?s)\{\{\s*Form::textarea\(\s*'([^']*)'\s*,\s*([^,\]]*(?:\([^)]*\)[^,\]]*)*[^,\]]*)\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::textarea\(\s*'([^']*)'\s*,\s*([^,\]]*(?:\([^)]*\)[^,\]]*)*[^,\]]*)\s*\)\s*\!\!\}`,
+	}
+
+	for _, pattern := range twoParamPatterns {
+		re := regexp.MustCompile(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			matches := re.FindStringSubmatch(match)
+			return processFormTextarea(matches[1], matches[2], "")
+		})
+	}
+
+	threeParamPatterns := []string{
 		`(?s)\{\{\s*Form::textarea\(\s*'([^']+)'\s*,\s*([^,]*(?:\([^)]*\)[^,]*)*[^,]*)\s*,\s*\[(.*?)\]\s*\)\s*\}\}`,
 		`(?s)\{\!\!\s*Form::textarea\(\s*'([^']+)'\s*,\s*([^,]*(?:\([^)]*\)[^,]*)*[^,]*)\s*,\s*\[(.*?)\]\s*\)\s*\!\!\}`,
 	}
 
-	for _, pattern := range patterns {
+	for _, pattern := range threeParamPatterns {
 		re := regexp.MustCompile(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			matches := re.FindStringSubmatch(match)
@@ -366,7 +428,18 @@ func replaceFormTextarea(text string) string {
 }
 
 func processFormTextarea(name, value, attrs string) string {
+	if attrs == "" && value == "" {
+		return fmt.Sprintf(`<textarea name="%s"></textarea>`, name)
+	}
+	if attrs == "" {
+		return fmt.Sprintf(`<textarea name="%s">{{ %s }}</textarea>`, name, value)
+	}
+
 	extraAttrs := ""
+
+	// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
+	// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
+	attrOrder := []string{"cols", "rows", "placeholder", "class"}
 	attrPatterns := map[string]string{
 		"cols":        `'cols'\s*=>\s*(\d+)`,
 		"rows":        `'rows'\s*=>\s*(?:'([^']+)'|(\d+))`,
@@ -374,18 +447,20 @@ func processFormTextarea(name, value, attrs string) string {
 		"class":       `'class'\s*=>\s*'([^']+)'`,
 	}
 
-	for attr, pattern := range attrPatterns {
-		if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-			matches := re.FindStringSubmatch(attrs)
-			var val string
-			if len(matches) > 2 && matches[2] != "" {
-				// 数値の場合
-				val = matches[2]
-			} else {
-				// 文字列の場合
-				val = matches[1]
+	for _, attr := range attrOrder {
+		if pattern, exists := attrPatterns[attr]; exists {
+			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
+				matches := re.FindStringSubmatch(attrs)
+				var val string
+				if len(matches) > 2 && matches[2] != "" {
+					// 数値の場合
+					val = matches[2]
+				} else {
+					// 文字列の場合
+					val = matches[1]
+				}
+				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
 			}
-			extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
 		}
 	}
 
@@ -545,13 +620,19 @@ func processFormInput(inputType string, params []string) string {
 	extraAttrs := ""
 	if len(params) > 2 {
 		attrs := params[2]
+
+		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
+		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
+		attrOrder := []string{"placeholder", "class", "id"}
 		attrPatterns := map[string]string{
 			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
 			"class":       `'class'\s*=>\s*'([^']+)'`,
 			"id":          `'id'\s*=>\s*'([^']+)'`,
 		}
 
-		for attr, pattern := range attrPatterns {
+		// 定義した順序に従って属性を処理し、常に同じ順序でHTML属性を出力
+		for _, attr := range attrOrder {
+			pattern := attrPatterns[attr]
 			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
 				val := re.FindStringSubmatch(attrs)[1]
 				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
@@ -652,11 +733,45 @@ func processFormCheckbox(params []string) string {
 		checked = params[2]
 	}
 
+	extraAttrs := ""
+	if len(params) > 3 {
+		attrs := params[3]
+
+		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
+		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
+		attrOrder := []string{"class", "id", "style", "disabled"}
+		attrPatterns := map[string]string{
+			"class":    `'class'\s*=>\s*'([^']+)'`,
+			"id":       `'id'\s*=>\s*'([^']+)'`,
+			"style":    `'style'\s*=>\s*'([^']+)'`,
+			"disabled": `'disabled'\s*=>\s*'([^']*)'`,
+		}
+
+		// 定義した順序に従って属性を処理し、常に同じ順序でHTML属性を出力
+		for _, attr := range attrOrder {
+			pattern := attrPatterns[attr]
+			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
+				attrValue := re.FindStringSubmatch(attrs)[1]
+				if attr == "disabled" {
+					// HTML5では disabled 属性は値なしのブール属性として扱う
+					if attrValue == "" || attrValue == "disabled" {
+						extraAttrs += " disabled"
+					} else {
+						extraAttrs += fmt.Sprintf(` %s="%s"`, attr, attrValue)
+					}
+				} else {
+					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, attrValue)
+				}
+			}
+		}
+	}
+
+	// 配列形式の名前かどうかで処理を分岐（Laravel の配列形式サポートのため）
 	if strings.HasSuffix(name, "[]") {
-		return fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(in_array(%s, (array)%s)) checked @endif>`,
-			name, value, value, checked)
+		return fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(in_array(%s, (array)%s)) checked @endif%s>`,
+			name, value, value, checked, extraAttrs)
 	} else {
-		return fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(%s) checked @endif>`, name, value, checked)
+		return fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(%s) checked @endif%s>`, name, value, checked, extraAttrs)
 	}
 }
 
@@ -708,8 +823,6 @@ func processFormSubmit(params []string) string {
 			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
 				value := re.FindStringSubmatch(attrs)[1]
 				if attr == "disabled" {
-					// HTML5では disabled 属性は値なしのブール属性として扱う
-					// Laravel の 'disabled' => 'disabled' を標準的な disabled に変換
 					if value == "" || value == "disabled" {
 						extraAttrs += " disabled"
 					} else {
