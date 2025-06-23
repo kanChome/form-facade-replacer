@@ -376,7 +376,6 @@ func processFormButton(textParam, attrs string) string {
 		}
 	}
 
-	// data属性の処理
 	dataRe := regexp.MustCompile(`'(data-[^']+)'\s*=>\s*'([^']+)'`)
 	for _, match := range dataRe.FindAllStringSubmatch(attrs, -1) {
 		extraAttrs += fmt.Sprintf(` %s="%s"`, match[1], match[2])
@@ -562,7 +561,6 @@ func processFormNumber(params []string) string {
 
 	name := strings.Trim(params[0], `'"`)
 
-	// HTMLの value 属性として不適切な値を除外するため、空の場合は属性自体を省略
 	valueAttr := ""
 	if len(params) > 1 {
 		rawValue := strings.TrimSpace(params[1])
@@ -575,7 +573,6 @@ func processFormNumber(params []string) string {
 			valueAttr = fmt.Sprintf(` value="{{ %s }}"`, rawValue)
 		}
 	}
-	// 1パラメータの場合、値が指定されていないため value 属性は不要
 
 	extraAttrs := ""
 	if len(params) > 2 {
