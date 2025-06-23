@@ -486,14 +486,29 @@ func processFormNumber(params []string) string {
 	}
 
 	name := strings.Trim(params[0], `'"`)
-	value := ""
+
+	// HTMLの value 属性として不適切な値を除外するため、空の場合は属性自体を省略
+	valueAttr := ""
 	if len(params) > 1 {
-		value = params[1]
+		rawValue := strings.TrimSpace(params[1])
+
+		// HTMLとして無効な値（null、空文字列）の場合、value属性を出力しない
+		// これにより `<input value="">` ではなく `<input>` となり、HTMLが適切になる
+		if rawValue == "null" || rawValue == "''" || rawValue == `""` || rawValue == "" {
+			valueAttr = ""
+		} else {
+			valueAttr = fmt.Sprintf(` value="{{ %s }}"`, rawValue)
+		}
 	}
+	// 1パラメータの場合、値が指定されていないため value 属性は不要
 
 	extraAttrs := ""
 	if len(params) > 2 {
 		attrs := params[2]
+
+		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
+		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
+		attrOrder := []string{"placeholder", "class", "id", "min", "max", "step"}
 		attrPatterns := map[string]string{
 			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
 			"class":       `'class'\s*=>\s*'([^']+)'`,
@@ -503,7 +518,9 @@ func processFormNumber(params []string) string {
 			"step":        `'step'\s*=>\s*(\d+)`,
 		}
 
-		for attr, pattern := range attrPatterns {
+		// 定義した順序に従って属性を処理し、常に同じ順序でHTML属性を出力
+		for _, attr := range attrOrder {
+			pattern := attrPatterns[attr]
 			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
 				val := re.FindStringSubmatch(attrs)[1]
 				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
@@ -511,7 +528,7 @@ func processFormNumber(params []string) string {
 		}
 	}
 
-	return fmt.Sprintf(`<input type="number" name="%s" value="{{ %s }}"%s>`, name, value, extraAttrs)
+	return fmt.Sprintf(`<input type="number" name="%s"%s%s>`, name, valueAttr, extraAttrs)
 }
 
 func processFormInput(inputType string, params []string) string {
@@ -674,6 +691,9 @@ func processFormSubmit(params []string) string {
 	if len(params) > 1 {
 		attrs := params[1]
 
+		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
+		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
+		attrOrder := []string{"class", "id", "style", "onclick", "disabled"}
 		attrPatterns := map[string]string{
 			"class":    `'class'\s*=>\s*'([^']+)'`,
 			"id":       `'id'\s*=>\s*'([^']+)'`,
@@ -682,10 +702,14 @@ func processFormSubmit(params []string) string {
 			"disabled": `'disabled'\s*=>\s*'([^']*)'`,
 		}
 
-		for attr, pattern := range attrPatterns {
+		// 定義した順序に従って属性を処理し、常に同じ順序でHTML属性を出力
+		for _, attr := range attrOrder {
+			pattern := attrPatterns[attr]
 			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
 				value := re.FindStringSubmatch(attrs)[1]
 				if attr == "disabled" {
+					// HTML5では disabled 属性は値なしのブール属性として扱う
+					// Laravel の 'disabled' => 'disabled' を標準的な disabled に変換
 					if value == "" || value == "disabled" {
 						extraAttrs += " disabled"
 					} else {
