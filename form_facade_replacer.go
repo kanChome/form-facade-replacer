@@ -311,7 +311,12 @@ func processFormHidden(params []string) string {
 			extraAttrs += fmt.Sprintf(` class="%s"`, classRe.FindStringSubmatch(attrs)[1])
 		}
 	}
-
+	// 配列を返す可能性のあるヘルパー関数を検出
+	arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
+	if arrayHelperPattern.MatchString(strings.TrimSpace(value)) {
+		// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
+		return fmt.Sprintf(`<input type="hidden" name="%s" value="{!! json_encode(%s) !!}"%s>`, nameAttr, value, extraAttrs)
+	}
 	return fmt.Sprintf(`<input type="hidden" name="%s" value="{{ %s }}"%s>`, nameAttr, value, extraAttrs)
 }
 
@@ -462,7 +467,13 @@ func processFormTextarea(name, value, attrs string) string {
 			}
 		}
 	}
-
+	}
+	// 配列を返す可能性のあるヘルパー関数を検出
+	arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
+	if arrayHelperPattern.MatchString(strings.TrimSpace(value)) {
+		// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
+		return fmt.Sprintf(`<textarea name="%s"%s>{!! json_encode(%s) !!}</textarea>`, name, extraAttrs, value)
+	}
 	return fmt.Sprintf(`<textarea name="%s"%s>{{ %s }}</textarea>`, name, extraAttrs, value)
 }
 
@@ -570,10 +581,16 @@ func processFormNumber(params []string) string {
 		if rawValue == "null" || rawValue == "''" || rawValue == `""` || rawValue == "" {
 			valueAttr = ""
 		} else {
+			// 配列を返す可能性のあるヘルパー関数を検出
+			arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
+			if arrayHelperPattern.MatchString(strings.TrimSpace(rawValue)) {
+				// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
+				valueAttr = fmt.Sprintf(` value="{!! json_encode(%s) !!}"`, rawValue)
+		} else {
 			valueAttr = fmt.Sprintf(` value="{{ %s }}"`, rawValue)
 		}
 	}
-
+	}
 	extraAttrs := ""
 	if len(params) > 2 {
 		attrs := params[2]
@@ -636,7 +653,12 @@ func processFormInput(inputType string, params []string) string {
 			}
 		}
 	}
-
+	// 配列を返す可能性のあるヘルパー関数を検出
+	arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
+	if arrayHelperPattern.MatchString(strings.TrimSpace(value)) {
+		// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
+		return fmt.Sprintf(`<input type="%s" name="%s" value="{!! json_encode(%s) !!}"%s>`, inputType, name, value, extraAttrs)
+	}
 	return fmt.Sprintf(`<input type="%s" name="%s" value="{{ %s }}"%s>`, inputType, name, value, extraAttrs)
 }
 
