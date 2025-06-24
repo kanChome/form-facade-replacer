@@ -796,8 +796,8 @@ func processFormCheckbox(params []string) string {
 
 func replaceFormSubmit(text string) string {
 	patterns := []string{
-		`\{\!\!\s*Form::submit\(\s*([^}]+)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::submit\(\s*([^}]+)\s*\)\s*\}\}`,
+		`(?i)\{\!\!\s*Form::submit\(\s*([^}]+)\s*\)\s*\!\!\}`,
+		`(?i)\{\{\s*Form::submit\(\s*([^}]+)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
