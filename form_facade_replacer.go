@@ -390,83 +390,91 @@ func processFormButton(textParam, attrs string) string {
 }
 
 func replaceFormTextarea(text string) string {
-	singleParamPatterns := []string{
-		`(?s)\{\{\s*Form::textarea\(\s*'([^']*)'\s*\)\s*\}\}`,
-		`(?s)\{\!\!\s*Form::textarea\(\s*'([^']*)'\s*\)\s*\!\!\}`,
+	patterns := []string{
+		`\{\!\!\s*Form::textarea\(\s*([^}]+)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::textarea\(\s*([^}]+)\s*\)\s*\}\}`,
 	}
-
-	for _, pattern := range singleParamPatterns {
+	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			matches := re.FindStringSubmatch(match)
-			return processFormTextarea(matches[1], "", "")
+			params := extractParams(re.FindStringSubmatch(match)[1])
+			return processFormTextarea(params)
 		})
 	}
 
-	twoParamPatterns := []string{
-		`(?s)\{\{\s*Form::textarea\(\s*'([^']*)'\s*,\s*([^,\]]*(?:\([^)]*\)[^,\]]*)*[^,\]]*)\s*\)\s*\}\}`,
-		`(?s)\{\!\!\s*Form::textarea\(\s*'([^']*)'\s*,\s*([^,\]]*(?:\([^)]*\)[^,\]]*)*[^,\]]*)\s*\)\s*\!\!\}`,
-	}
-
-	for _, pattern := range twoParamPatterns {
-		re := regexp.MustCompile(pattern)
-		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			matches := re.FindStringSubmatch(match)
-			return processFormTextarea(matches[1], matches[2], "")
-		})
-	}
-
-	threeParamPatterns := []string{
-		`(?s)\{\{\s*Form::textarea\(\s*'([^']+)'\s*,\s*([^,]*(?:\([^)]*\)[^,]*)*[^,]*)\s*,\s*\[(.*?)\]\s*\)\s*\}\}`,
-		`(?s)\{\!\!\s*Form::textarea\(\s*'([^']+)'\s*,\s*([^,]*(?:\([^)]*\)[^,]*)*[^,]*)\s*,\s*\[(.*?)\]\s*\)\s*\!\!\}`,
-	}
-
-	for _, pattern := range threeParamPatterns {
-		re := regexp.MustCompile(pattern)
-		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			matches := re.FindStringSubmatch(match)
-			return processFormTextarea(matches[1], matches[2], matches[3])
-		})
-	}
 	return text
 }
 
-func processFormTextarea(name, value, attrs string) string {
-	if attrs == "" && value == "" {
-		return fmt.Sprintf(`<textarea name="%s"></textarea>`, name)
+func processFormTextarea(params []string) string {
+	if len(params) < 1 {
+		return ""
 	}
-	if attrs == "" {
-		return fmt.Sprintf(`<textarea name="%s">{{ %s }}</textarea>`, name, value)
+	name := strings.Trim(params[0], `'"`)
+	value := ""
+
+	if len(params) > 1 {
+		value = params[1]
+	}
+
+	// 値なしまたは空値の場合の処理
+	if len(params) < 2 || value == "" {
+		extraAttrs := ""
+		if len(params) > 2 {
+			attrs := params[2]
+			attrOrder := []string{"cols", "rows", "placeholder", "class"}
+			attrPatterns := map[string]string{
+				"cols":        `'cols'\s*=>\s*(\d+)`,
+				"rows":        `'rows'\s*=>\s*(?:'([^']+)'|(\d+))`,
+				"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
+				"class":       `'class'\s*=>\s*'([^']+)'`,
+			}
+			for _, attr := range attrOrder {
+				if pattern, exists := attrPatterns[attr]; exists {
+					if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
+						matches := re.FindStringSubmatch(attrs)
+						var val string
+						if len(matches) > 2 && matches[2] != "" {
+							val = matches[2]
+						} else {
+							val = matches[1]
+						}
+						extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
+					}
+				}
+			}
+		}
+		return fmt.Sprintf(`<textarea name="%s"%s></textarea>`, name, extraAttrs)
 	}
 
 	extraAttrs := ""
+	if len(params) > 2 {
+		attrs := params[2]
+		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
+		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
+		attrOrder := []string{"cols", "rows", "placeholder", "class"}
+		attrPatterns := map[string]string{
+			"cols":        `'cols'\s*=>\s*(\d+)`,
+			"rows":        `'rows'\s*=>\s*(?:'([^']+)'|(\d+))`,
+			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
+			"class":       `'class'\s*=>\s*'([^']+)'`,
+		}
 
-	// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
-	// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
-	attrOrder := []string{"cols", "rows", "placeholder", "class"}
-	attrPatterns := map[string]string{
-		"cols":        `'cols'\s*=>\s*(\d+)`,
-		"rows":        `'rows'\s*=>\s*(?:'([^']+)'|(\d+))`,
-		"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
-		"class":       `'class'\s*=>\s*'([^']+)'`,
-	}
-
-	for _, attr := range attrOrder {
-		if pattern, exists := attrPatterns[attr]; exists {
-			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-				matches := re.FindStringSubmatch(attrs)
-				var val string
-				if len(matches) > 2 && matches[2] != "" {
-					// 数値の場合
-					val = matches[2]
-				} else {
-					// 文字列の場合
-					val = matches[1]
+		for _, attr := range attrOrder {
+			if pattern, exists := attrPatterns[attr]; exists {
+				if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
+					matches := re.FindStringSubmatch(attrs)
+					var val string
+					if len(matches) > 2 && matches[2] != "" {
+						// 数値の場合
+						val = matches[2]
+					} else {
+						// 文字列の場合
+						val = matches[1]
+					}
+					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
 				}
-				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
 			}
 		}
-	}
 	}
 	// 配列を返す可能性のあるヘルパー関数を検出
 	arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
@@ -586,10 +594,10 @@ func processFormNumber(params []string) string {
 			if arrayHelperPattern.MatchString(strings.TrimSpace(rawValue)) {
 				// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
 				valueAttr = fmt.Sprintf(` value="{!! json_encode(%s) !!}"`, rawValue)
-		} else {
-			valueAttr = fmt.Sprintf(` value="{{ %s }}"`, rawValue)
+			} else {
+				valueAttr = fmt.Sprintf(` value="{{ %s }}"`, rawValue)
+			}
 		}
-	}
 	}
 	extraAttrs := ""
 	if len(params) > 2 {
