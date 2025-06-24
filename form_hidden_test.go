@@ -33,27 +33,27 @@ func TestFormHidden(t *testing.T) {
 		{
 			name:     "Hidden field with old() helper",
 			input:    "{!! Form::hidden('time_ids', old('time_ids')) !!}",
-			expected: `<input type="hidden" name="time_ids" value="{!! json_encode(old('time_ids')) !!}">`,
+			expected: `<input type="hidden" name="time_ids" value="{{ old('time_ids') }}">`,
 		},
 		{
 			name:     "Hidden field with array name and old() helper",
 			input:    "{!! Form::hidden('time_ids[]', old('time_ids')) !!}",
-			expected: `<input type="hidden" name="time_ids[]" value="{!! json_encode(old('time_ids')) !!}">`,
+			expected: `<input type="hidden" name="time_ids[]" value="{{ old('time_ids') }}">`,
 		},
 		{
 			name:     "Hidden field with session() helper",
 			input:    "{{ Form::hidden('session_data', session('data')) }}",
-			expected: `<input type="hidden" name="session_data" value="{!! json_encode(session('data')) !!}">`,
+			expected: `<input type="hidden" name="session_data" value="{{ session('data') }}">`,
 		},
 		{
 			name:     "Hidden field with request() helper",
 			input:    "{{ Form::hidden('request_data', request('data')) }}",
-			expected: `<input type="hidden" name="request_data" value="{!! json_encode(request('data')) !!}">`,
+			expected: `<input type="hidden" name="request_data" value="{{ request('data') }}">`,
 		},
 		{
 			name:     "Hidden field with input() helper",
 			input:    "{{ Form::hidden('input_data', input('data')) }}",
-			expected: `<input type="hidden" name="input_data" value="{!! json_encode(input('data')) !!}">`,
+			expected: `<input type="hidden" name="input_data" value="{{ input('data') }}">`,
 		},
 		{
 			name:     "Hidden field with null value",
@@ -68,12 +68,12 @@ func TestFormHidden(t *testing.T) {
 		{
 			name:     "Hidden field with uppercase OLD() helper",
 			input:    "{{ Form::hidden('data', OLD('data')) }}",
-			expected: `<input type="hidden" name="data" value="{!! json_encode(OLD('data')) !!}">`,
+			expected: `<input type="hidden" name="data" value="{{ OLD('data') }}">`,
 		},
 		{
 			name:     "Hidden field with spaced old() helper",
 			input:    "{{ Form::hidden('data', old ('data')) }}",
-			expected: `<input type="hidden" name="data" value="{!! json_encode(old ('data')) !!}">`,
+			expected: `<input type="hidden" name="data" value="{{ old ('data') }}">`,
 		},
 		{
 			name:     "Hidden field with complex array name",
@@ -83,12 +83,17 @@ func TestFormHidden(t *testing.T) {
 		{
 			name:     "Hidden field with old() and array name",
 			input:    "{!! Form::hidden('users[]', old('users.0.name')) !!}",
-			expected: `<input type="hidden" name="users[]" value="{!! json_encode(old('users.0.name')) !!}">`,
+			expected: `<input type="hidden" name="users[]" value="{{ old('users.0.name') }}">`,
 		},
 		{
 			name:     "Hidden field with multiple attributes and old()",
 			input:    "{!! Form::hidden('data[]', old('data'), ['class' => 'hidden-data', 'id' => 'data-field']) !!}",
-			expected: `<input type="hidden" name="data[]" value="{!! json_encode(old('data')) !!}" id="data-field" class="hidden-data">`,
+			expected: `<input type="hidden" name="data[]" value="{{ old('data') }}" id="data-field" class="hidden-data">`,
+		},
+		{
+			name:     "Hidden field with old() and default value",
+			input:    "{!! Form::hidden('time_ids[]', old('time_ids', $timeIds)) !!}",
+			expected: `<input type="hidden" name="time_ids[]" value="{{ old('time_ids', $timeIds) }}">`,
 		},
 	}
 

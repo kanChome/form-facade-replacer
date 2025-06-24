@@ -215,6 +215,12 @@ func FormatValueAttribute(value string) string {
 	return fmt.Sprintf("{{ %s }}", value)
 }
 
+// FormatHiddenValueAttribute hidden input専用の値フォーマット
+func FormatHiddenValueAttribute(value string) string {
+	// hidden inputでは基本的に通常のBlade出力を使用
+	return fmt.Sprintf("{{ %s }}", value)
+}
+
 func ProcessBladePatterns(text, formMethod string, processor func(string) string) string {
 	patterns := []string{
 		fmt.Sprintf(BladeExclamationPattern, formMethod),
@@ -416,8 +422,8 @@ func processFormHidden(params []string) string {
 		extraAttrs = attrProcessor.ProcessAttributes(params[2])
 	}
 
-	// Laravel helper関数を考慮した値フォーマット
-	formattedValue := FormatValueAttribute(value)
+	// hidden input専用の値フォーマット
+	formattedValue := FormatHiddenValueAttribute(value)
 	return fmt.Sprintf(`<input type="hidden" name="%s" value="%s"%s>`, nameAttr, formattedValue, extraAttrs)
 }
 
