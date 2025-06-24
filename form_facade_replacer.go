@@ -10,7 +10,40 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 )
+
+// 正規表現キャッシュ
+type RegexCache struct {
+	mu    sync.RWMutex
+	cache map[string]*regexp.Regexp
+}
+
+var regexCache = &RegexCache{
+	cache: make(map[string]*regexp.Regexp),
+}
+
+// GetRegex 正規表現の取得（キャッシュあり）
+func (rc *RegexCache) GetRegex(pattern string) *regexp.Regexp {
+	rc.mu.RLock()
+	if re, exists := rc.cache[pattern]; exists {
+		rc.mu.RUnlock()
+		return re
+	}
+	rc.mu.RUnlock()
+
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	// ダブルチェック（他のゴルーチンが既に作成している可能性）
+	if re, exists := rc.cache[pattern]; exists {
+		return re
+	}
+
+	re := regexp.MustCompile(pattern)
+	rc.cache[pattern] = re
+	return re
+}
 
 type ReplacementConfig struct {
 	TargetPath     string
@@ -132,6 +165,75 @@ func containsFormFacade(filePath string) (bool, error) {
 	return false, scanner.Err()
 }
 
+// 共通の正規表現パターンとヘルパー関数
+
+// BladePattern 定数 - Bladeの基本パターン
+const (
+	BladeExclamationPattern = `\{\!\!\s*%s\s*\!\!\}`
+	BladeCurlyPattern       = `\{\{\s*%s\s*\}\}`
+)
+
+// AttributeProcessor 属性処理の統一インターフェース
+type AttributeProcessor struct {
+	Order    []string
+	Patterns map[string]string
+}
+
+// ProcessAttributes 属性を統一された順序で処理
+func (ap *AttributeProcessor) ProcessAttributes(attrs string) string {
+	var extraAttrs string
+	for _, attr := range ap.Order {
+		if pattern, exists := ap.Patterns[attr]; exists {
+			if re := regexCache.GetRegex(pattern); re.MatchString(attrs) {
+				matches := re.FindStringSubmatch(attrs)
+				var val string
+				if len(matches) > 2 && matches[2] != "" {
+					val = matches[2] // 数値の場合
+				} else {
+					val = matches[1] // 文字列の場合
+				}
+				// disabled属性の特別処理
+				if attr == "disabled" && (val == "" || val == "disabled") {
+					extraAttrs += fmt.Sprintf(` %s`, attr)
+				} else {
+					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
+				}
+			}
+		}
+	}
+	return extraAttrs
+}
+
+func DetectArrayHelper(value string) bool {
+	return regexCache.GetRegex(`(?i)^(old|session|request|input)\s*\(`).MatchString(strings.TrimSpace(value))
+}
+
+func FormatValueAttribute(value string) string {
+	if DetectArrayHelper(value) {
+		return fmt.Sprintf("{!! json_encode(%s) !!}", value)
+	}
+	return fmt.Sprintf("{{ %s }}", value)
+}
+
+func ProcessBladePatterns(text, formMethod string, processor func(string) string) string {
+	patterns := []string{
+		fmt.Sprintf(BladeExclamationPattern, formMethod),
+		fmt.Sprintf(BladeCurlyPattern, formMethod),
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			matches := re.FindStringSubmatch(match)
+			if len(matches) > 1 {
+				return processor(matches[1])
+			}
+			return processor("")
+		})
+	}
+	return text
+}
+
 func replaceFormPatterns(filePath string) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -162,7 +264,7 @@ func replaceFormOpen(text string) string {
 	}
 
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			return processFormOpen(re.FindStringSubmatch(match)[1])
 		})
@@ -171,90 +273,89 @@ func replaceFormOpen(text string) string {
 }
 
 func processFormOpen(content string) string {
-	action := ""
-	method := "GET"
-	extraAttrs := ""
+	action := extractFormAction(content)
+	method := extractFormMethod(content)
+	extraAttrs := extractFormAttributes(content)
 
-	// Laravel の route 指定は複数の形式があるため、優先順位に従って順次チェック
+	return buildFormTag(action, method, extraAttrs)
+}
+
+// extractFormAction アクション属性の抽出（route、url の優先順位処理）
+func extractFormAction(content string) string {
 	// まず配列形式のroute（パラメータ付き）をチェック: 'route' => ['user.store', ['id' => 1]]
-	paramRouteRe := regexp.MustCompile(`'route'\s*=>\s*\[\s*'([^']+)'\s*,\s*(\[[^\]]*\])`)
+	paramRouteRe := regexCache.GetRegex(`'route'\s*=>\s*\[\s*'([^']+)'\s*,\s*(\[[^\]]*\])`)
 	if paramMatches := paramRouteRe.FindStringSubmatch(content); len(paramMatches) > 2 {
-		action = fmt.Sprintf("{{ route('%s', %s) }}", paramMatches[1], paramMatches[2])
-	} else {
-		// 次に配列形式のroute（パラメータなし）をチェック: 'route' => ['user.index']
-		arrayRouteRe := regexp.MustCompile(`'route'\s*=>\s*\[\s*'([^']+)'\s*\]`)
-		if arrayMatches := arrayRouteRe.FindStringSubmatch(content); len(arrayMatches) > 1 {
-			action = fmt.Sprintf("{{ route('%s') }}", arrayMatches[1])
-		} else {
-			// 最後に文字列形式のroute: 'route' => 'user.index'
-			simpleRouteRe := regexp.MustCompile(`'route'\s*=>\s*'([^']+)'`)
-			if simpleMatches := simpleRouteRe.FindStringSubmatch(content); len(simpleMatches) > 1 {
-				action = fmt.Sprintf("{{ route('%s') }}", simpleMatches[1])
-			}
-		}
+		return fmt.Sprintf("{{ route('%s', %s) }}", paramMatches[1], paramMatches[2])
+	}
+
+	// 次に配列形式のroute（パラメータなし）をチェック: 'route' => ['user.index']
+	arrayRouteRe := regexCache.GetRegex(`'route'\s*=>\s*\[\s*'([^']+)'\s*\]`)
+	if arrayMatches := arrayRouteRe.FindStringSubmatch(content); len(arrayMatches) > 1 {
+		return fmt.Sprintf("{{ route('%s') }}", arrayMatches[1])
+	}
+
+	// 最後に文字列形式のroute: 'route' => 'user.index'
+	simpleRouteRe := regexCache.GetRegex(`'route'\s*=>\s*'([^']+)'`)
+	if simpleMatches := simpleRouteRe.FindStringSubmatch(content); len(simpleMatches) > 1 {
+		return fmt.Sprintf("{{ route('%s') }}", simpleMatches[1])
 	}
 
 	// route が見つからなかった場合のみ url 処理を実行（route が優先）
-	if action == "" {
-		urlRe := regexp.MustCompile(`'url'\s*=>\s*([^,\]]+)`)
-		if matches := urlRe.FindStringSubmatch(content); len(matches) > 1 {
-			urlVal := strings.TrimSpace(matches[1])
-			if strings.HasPrefix(urlVal, "route(") {
-				routeFuncRe := regexp.MustCompile(`route\([^)]*(?:\([^)]*\)[^)]*)*\)`)
-				if routeMatch := routeFuncRe.FindString(content); routeMatch != "" {
-					action = fmt.Sprintf("{{ %s }}", routeMatch)
-				} else {
-					action = fmt.Sprintf("{{ %s }}", urlVal)
-				}
-			} else {
-				action = urlVal
+	return extractFormUrl(content)
+}
+
+// extractFormUrl URL属性の抽出
+func extractFormUrl(content string) string {
+	urlRe := regexCache.GetRegex(`'url'\s*=>\s*([^,\]]+)`)
+	if matches := urlRe.FindStringSubmatch(content); len(matches) > 1 {
+		urlVal := strings.TrimSpace(matches[1])
+		if strings.HasPrefix(urlVal, "route(") {
+			routeFuncRe := regexCache.GetRegex(`route\([^)]*(?:\([^)]*\)[^)]*)*\)`)
+			if routeMatch := routeFuncRe.FindString(content); routeMatch != "" {
+				return fmt.Sprintf("{{ %s }}", routeMatch)
 			}
+			return fmt.Sprintf("{{ %s }}", urlVal)
 		}
+		return urlVal
 	}
+	return ""
+}
 
-	if methodRe := regexp.MustCompile(`'method'\s*=>\s*'([^']+)'`); methodRe.MatchString(content) {
-		method = methodRe.FindStringSubmatch(content)[1]
+// extractFormMethod HTTP メソッドの抽出
+func extractFormMethod(content string) string {
+	methodRe := regexCache.GetRegex(`'method'\s*=>\s*'([^']+)'`)
+	if methodRe.MatchString(content) {
+		return methodRe.FindStringSubmatch(content)[1]
 	}
+	return "GET"
+}
 
-	// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
-	// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
-	attrOrder := []string{"class", "id", "target"}
-	attrPatterns := map[string]string{
-		"target": `'target'\s*=>\s*'([^']+)'`,
-		"id":     `'id'\s*=>\s*'([^']+)'`,
-		"class":  `'class'\s*=>\s*'([^']+)'`,
+// extractFormAttributes フォーム属性の抽出
+func extractFormAttributes(content string) string {
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"class", "id", "target"},
+		Patterns: map[string]string{
+			"target": `'target'\s*=>\s*'([^']+)'`,
+			"id":     `'id'\s*=>\s*'([^']+)'`,
+			"class":  `'class'\s*=>\s*'([^']+)'`,
+		},
 	}
+	return attrProcessor.ProcessAttributes(content)
+}
 
-	for _, attr := range attrOrder {
-		if pattern, exists := attrPatterns[attr]; exists {
-			if re := regexp.MustCompile(pattern); re.MatchString(content) {
-				value := re.FindStringSubmatch(content)[1]
-				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
-			}
-		}
-	}
-
-	// GETリクエストはCSRF攻撃の対象ではないため、CSRF トークンを含めない
-	// POST/PUT/PATCH/DELETE の場合のみ CSRF 保護が必要
+// buildFormTag フォームタグの構築
+func buildFormTag(action, method, extraAttrs string) string {
 	if strings.ToUpper(method) == "GET" {
 		return fmt.Sprintf(`<form action="%s" method="%s"%s>`, action, method, extraAttrs)
-	} else {
-		return fmt.Sprintf(`<form action="%s" method="%s"%s>
-{{ csrf_field() }}`, action, method, extraAttrs)
 	}
+	return fmt.Sprintf(`<form action="%s" method="%s"%s>
+{{ csrf_field() }}`, action, method, extraAttrs)
 }
 
 func replaceFormClose(text string) string {
-	patterns := []string{
-		`\{\!\!\s*Form::close\(\)\s*\!\!\}`,
-		`\{\{\s*Form::close\(\)\s*\}\}`,
-	}
-
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
-		text = re.ReplaceAllString(text, "</form>")
-	}
-	return text
+	return ProcessBladePatterns(text, `Form::close\(\)`, func(content string) string {
+		return "</form>"
+	})
 }
 
 func replaceFormHidden(text string) string {
@@ -264,7 +365,7 @@ func replaceFormHidden(text string) string {
 	}
 
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			content := re.FindStringSubmatch(match)[1]
 			params := extractParamsAdvanced(content)
@@ -293,7 +394,7 @@ func processFormHidden(params []string) string {
 		}
 
 		for _, pattern := range patterns {
-			re := regexp.MustCompile(pattern)
+			re := regexCache.GetRegex(pattern)
 			if matches := re.FindStringSubmatch(name); len(matches) == 4 {
 				nameAttr = fmt.Sprintf("%s{{ %s }}%s", matches[1], matches[2], matches[3])
 				break
@@ -301,23 +402,23 @@ func processFormHidden(params []string) string {
 		}
 	}
 
+	// 属性処理の統一
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"id", "class"},
+		Patterns: map[string]string{
+			"id":    `'id'\s*=>\s*'([^']+)'`,
+			"class": `'class'\s*=>\s*'([^']+)'`,
+		},
+	}
+
 	extraAttrs := ""
 	if len(params) > 2 {
-		attrs := params[2]
-		if idRe := regexp.MustCompile(`'id'\s*=>\s*'([^']+)'`); idRe.MatchString(attrs) {
-			extraAttrs += fmt.Sprintf(` id="%s"`, idRe.FindStringSubmatch(attrs)[1])
-		}
-		if classRe := regexp.MustCompile(`'class'\s*=>\s*'([^']+)'`); classRe.MatchString(attrs) {
-			extraAttrs += fmt.Sprintf(` class="%s"`, classRe.FindStringSubmatch(attrs)[1])
-		}
+		extraAttrs = attrProcessor.ProcessAttributes(params[2])
 	}
-	// 配列を返す可能性のあるヘルパー関数を検出
-	arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
-	if arrayHelperPattern.MatchString(strings.TrimSpace(value)) {
-		// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
-		return fmt.Sprintf(`<input type="hidden" name="%s" value="{!! json_encode(%s) !!}"%s>`, nameAttr, value, extraAttrs)
-	}
-	return fmt.Sprintf(`<input type="hidden" name="%s" value="{{ %s }}"%s>`, nameAttr, value, extraAttrs)
+
+	// Laravel helper関数を考慮した値フォーマット
+	formattedValue := FormatValueAttribute(value)
+	return fmt.Sprintf(`<input type="hidden" name="%s" value="%s"%s>`, nameAttr, formattedValue, extraAttrs)
 }
 
 func replaceFormButton(text string) string {
@@ -327,7 +428,7 @@ func replaceFormButton(text string) string {
 	}
 
 	for _, pattern := range singleParamPatterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			matches := re.FindStringSubmatch(match)
 			return processFormButton(matches[1], "")
@@ -340,7 +441,7 @@ func replaceFormButton(text string) string {
 	}
 
 	for _, pattern := range twoParamPatterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			matches := re.FindStringSubmatch(match)
 			return processFormButton(matches[1], matches[2])
@@ -354,34 +455,21 @@ func processFormButton(textParam, attrs string) string {
 		return fmt.Sprintf(`<button>{!! %s !!}</button>`, textParam)
 	}
 
-	extraAttrs := ""
-
-	// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
-	// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
-	attrOrder := []string{"type", "onclick", "class", "id", "disabled"}
-	attrPatterns := map[string]string{
-		"type":     `'type'\s*=>\s*'([^']+)'`,
-		"onclick":  `'onclick'\s*=>\s*'([^']+)'`,
-		"class":    `'class'\s*=>\s*'([^']+)'`,
-		"id":       `'id'\s*=>\s*'([^']+)'`,
-		"disabled": `'disabled'\s*=>\s*'([^']+)'`,
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"type", "onclick", "class", "id", "disabled"},
+		Patterns: map[string]string{
+			"type":     `'type'\s*=>\s*'([^']+)'`,
+			"onclick":  `'onclick'\s*=>\s*'([^']+)'`,
+			"class":    `'class'\s*=>\s*'([^']+)'`,
+			"id":       `'id'\s*=>\s*'([^']+)'`,
+			"disabled": `'disabled'\s*=>\s*'([^']+)'`,
+		},
 	}
 
-	for _, attr := range attrOrder {
-		if pattern, exists := attrPatterns[attr]; exists {
-			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-				value := re.FindStringSubmatch(attrs)[1]
-				// disabled属性はHTML5標準に従い値なしで出力
-				if attr == "disabled" {
-					extraAttrs += fmt.Sprintf(` %s`, attr)
-				} else {
-					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
-				}
-			}
-		}
-	}
+	extraAttrs := attrProcessor.ProcessAttributes(attrs)
 
-	dataRe := regexp.MustCompile(`'(data-[^']+)'\s*=>\s*'([^']+)'`)
+	// data-属性の追加処理
+	dataRe := regexCache.GetRegex(`'(data-[^']+)'\s*=>\s*'([^']+)'`)
 	for _, match := range dataRe.FindAllStringSubmatch(attrs, -1) {
 		extraAttrs += fmt.Sprintf(` %s="%s"`, match[1], match[2])
 	}
@@ -395,7 +483,7 @@ func replaceFormTextarea(text string) string {
 		`\{\{\s*Form::textarea\(\s*([^}]+)\s*\)\s*\}\}`,
 	}
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			params := extractParams(re.FindStringSubmatch(match)[1])
 			return processFormTextarea(params)
@@ -416,70 +504,27 @@ func processFormTextarea(params []string) string {
 		value = params[1]
 	}
 
-	// 値なしまたは空値の場合の処理
-	if len(params) < 2 || value == "" {
-		extraAttrs := ""
-		if len(params) > 2 {
-			attrs := params[2]
-			attrOrder := []string{"cols", "rows", "placeholder", "class"}
-			attrPatterns := map[string]string{
-				"cols":        `'cols'\s*=>\s*(\d+)`,
-				"rows":        `'rows'\s*=>\s*(?:'([^']+)'|(\d+))`,
-				"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
-				"class":       `'class'\s*=>\s*'([^']+)'`,
-			}
-			for _, attr := range attrOrder {
-				if pattern, exists := attrPatterns[attr]; exists {
-					if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-						matches := re.FindStringSubmatch(attrs)
-						var val string
-						if len(matches) > 2 && matches[2] != "" {
-							val = matches[2]
-						} else {
-							val = matches[1]
-						}
-						extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
-					}
-				}
-			}
-		}
-		return fmt.Sprintf(`<textarea name="%s"%s></textarea>`, name, extraAttrs)
-	}
-
-	extraAttrs := ""
-	if len(params) > 2 {
-		attrs := params[2]
-		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
-		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
-		attrOrder := []string{"cols", "rows", "placeholder", "class"}
-		attrPatterns := map[string]string{
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"cols", "rows", "placeholder", "class"},
+		Patterns: map[string]string{
 			"cols":        `'cols'\s*=>\s*(\d+)`,
 			"rows":        `'rows'\s*=>\s*(?:'([^']+)'|(\d+))`,
 			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
 			"class":       `'class'\s*=>\s*'([^']+)'`,
-		}
-
-		for _, attr := range attrOrder {
-			if pattern, exists := attrPatterns[attr]; exists {
-				if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-					matches := re.FindStringSubmatch(attrs)
-					var val string
-					if len(matches) > 2 && matches[2] != "" {
-						// 数値の場合
-						val = matches[2]
-					} else {
-						// 文字列の場合
-						val = matches[1]
-					}
-					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
-				}
-			}
-		}
+		},
 	}
-	// 配列を返す可能性のあるヘルパー関数を検出
-	arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
-	if arrayHelperPattern.MatchString(strings.TrimSpace(value)) {
-		// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
+
+	extraAttrs := ""
+	if len(params) > 2 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[2])
+	}
+
+	// 値なしまたは空値の場合の処理
+	if len(params) < 2 || value == "" {
+		return fmt.Sprintf(`<textarea name="%s"%s></textarea>`, name, extraAttrs)
+	}
+
+	if DetectArrayHelper(value) {
 		return fmt.Sprintf(`<textarea name="%s"%s>{!! json_encode(%s) !!}</textarea>`, name, extraAttrs, value)
 	}
 	return fmt.Sprintf(`<textarea name="%s"%s>{{ %s }}</textarea>`, name, extraAttrs, value)
@@ -492,7 +537,7 @@ func replaceFormLabel(text string) string {
 	}
 
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			params := extractParams(re.FindStringSubmatch(match)[1])
 			return processFormLabel(params)
@@ -516,26 +561,27 @@ func processFormLabel(params []string) string {
 		textParam = params[1]
 	}
 
+	// 属性処理の統一
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"class", "id", "style"},
+		Patterns: map[string]string{
+			"class": `'class'\s*=>\s*'([^']+)'`,
+			"id":    `'id'\s*=>\s*'([^']+)'`,
+			"style": `'style'\s*=>\s*'([^']+)'`,
+		},
+	}
+
 	extraAttrs := ""
 	if len(params) > 2 {
 		attrs := params[2]
 
-		if forRe := regexp.MustCompile(`'for'\s*=>\s*'([^']+)'`); forRe.MatchString(attrs) {
+		// for属性の特別処理
+		forRe := regexCache.GetRegex(`'for'\s*=>\s*'([^']+)'`)
+		if forRe.MatchString(attrs) {
 			forAttr = forRe.FindStringSubmatch(attrs)[1]
 		}
 
-		attrPatterns := map[string]string{
-			"class": `'class'\s*=>\s*'([^']+)'`,
-			"id":    `'id'\s*=>\s*'([^']+)'`,
-			"style": `'style'\s*=>\s*'([^']+)'`,
-		}
-
-		for attr, pattern := range attrPatterns {
-			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-				value := re.FindStringSubmatch(attrs)[1]
-				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
-			}
-		}
+		extraAttrs = attrProcessor.ProcessAttributes(attrs)
 	}
 
 	return fmt.Sprintf(`<label for="%s"%s>{!! %s !!}</label>`, forAttr, extraAttrs, textParam)
@@ -548,7 +594,7 @@ func replaceFormText(text string) string {
 	}
 
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			params := extractParams(re.FindStringSubmatch(match)[1])
 			return processFormInput("text", params)
@@ -564,7 +610,7 @@ func replaceFormNumber(text string) string {
 	}
 
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			params := extractParams(re.FindStringSubmatch(match)[1])
 			return processFormNumber(params)
@@ -579,49 +625,35 @@ func processFormNumber(params []string) string {
 	}
 
 	name := strings.Trim(params[0], `'"`)
-
-	valueAttr := ""
+	value := ""
 	if len(params) > 1 {
-		rawValue := strings.TrimSpace(params[1])
-
-		// HTMLとして無効な値（null、空文字列）の場合、value属性を出力しない
-		// これにより `<input value="">` ではなく `<input>` となり、HTMLが適切になる
-		if rawValue == "null" || rawValue == "''" || rawValue == `""` || rawValue == "" {
-			valueAttr = ""
-		} else {
-			// 配列を返す可能性のあるヘルパー関数を検出
-			arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
-			if arrayHelperPattern.MatchString(strings.TrimSpace(rawValue)) {
-				// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
-				valueAttr = fmt.Sprintf(` value="{!! json_encode(%s) !!}"`, rawValue)
-			} else {
-				valueAttr = fmt.Sprintf(` value="{{ %s }}"`, rawValue)
-			}
-		}
+		value = params[1]
 	}
-	extraAttrs := ""
-	if len(params) > 2 {
-		attrs := params[2]
 
-		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
-		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
-		attrOrder := []string{"placeholder", "class", "id", "min", "max", "step"}
-		attrPatterns := map[string]string{
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"placeholder", "class", "id", "min", "max", "step"},
+		Patterns: map[string]string{
 			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
 			"class":       `'class'\s*=>\s*'([^']+)'`,
 			"id":          `'id'\s*=>\s*'([^']+)'`,
 			"min":         `'min'\s*=>\s*(\d+)`,
 			"max":         `'max'\s*=>\s*(\d+)`,
 			"step":        `'step'\s*=>\s*(\d+)`,
-		}
+		},
+	}
 
-		// 定義した順序に従って属性を処理し、常に同じ順序でHTML属性を出力
-		for _, attr := range attrOrder {
-			pattern := attrPatterns[attr]
-			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-				val := re.FindStringSubmatch(attrs)[1]
-				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
-			}
+	extraAttrs := ""
+	if len(params) > 2 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[2])
+	}
+
+	// HTMLとして無効な値（null、空文字列）の場合、value属性を出力しない
+	valueAttr := ""
+	if value != "" {
+		rawValue := strings.TrimSpace(value)
+		if rawValue != "null" && rawValue != "''" && rawValue != `""` {
+			formattedValue := FormatValueAttribute(value)
+			valueAttr = fmt.Sprintf(` value="%s"`, formattedValue)
 		}
 	}
 
@@ -639,35 +671,22 @@ func processFormInput(inputType string, params []string) string {
 		value = params[1]
 	}
 
-	extraAttrs := ""
-	if len(params) > 2 {
-		attrs := params[2]
-
-		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
-		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
-		attrOrder := []string{"placeholder", "class", "id"}
-		attrPatterns := map[string]string{
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"placeholder", "class", "id"},
+		Patterns: map[string]string{
 			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
 			"class":       `'class'\s*=>\s*'([^']+)'`,
 			"id":          `'id'\s*=>\s*'([^']+)'`,
-		}
+		},
+	}
 
-		// 定義した順序に従って属性を処理し、常に同じ順序でHTML属性を出力
-		for _, attr := range attrOrder {
-			pattern := attrPatterns[attr]
-			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-				val := re.FindStringSubmatch(attrs)[1]
-				extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
-			}
-		}
+	extraAttrs := ""
+	if len(params) > 2 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[2])
 	}
-	// 配列を返す可能性のあるヘルパー関数を検出
-	arrayHelperPattern := regexp.MustCompile(`(?i)^(old|session|request|input)\s*\(`)
-	if arrayHelperPattern.MatchString(strings.TrimSpace(value)) {
-		// 配列の可能性がある場合はjson_encodeを使用してエスケープなしで出力
-		return fmt.Sprintf(`<input type="%s" name="%s" value="{!! json_encode(%s) !!}"%s>`, inputType, name, value, extraAttrs)
-	}
-	return fmt.Sprintf(`<input type="%s" name="%s" value="{{ %s }}"%s>`, inputType, name, value, extraAttrs)
+
+	formattedValue := FormatValueAttribute(value)
+	return fmt.Sprintf(`<input type="%s" name="%s" value="%s"%s>`, inputType, name, formattedValue, extraAttrs)
 }
 
 func replaceFormSelect(text string) string {
@@ -677,7 +696,7 @@ func replaceFormSelect(text string) string {
 	}
 
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			params := extractParams(re.FindStringSubmatch(match)[1])
 			return processFormSelect(params)
@@ -698,26 +717,18 @@ func processFormSelect(params []string) string {
 		selected = params[2]
 	}
 
-	extraAttrs := ""
-	if len(params) > 3 {
-		attrs := params[3]
-		attrPatterns := map[string]string{
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"class", "id", "onchange"},
+		Patterns: map[string]string{
 			"class":    `'class'\s*=>\s*'([^']+)'`,
 			"id":       `'id'\s*=>\s*'([^']+)'`,
-			"onChange": `'onChange'\s*=>\s*'([^']+)'`,
-			"onchange": `'onchange'\s*=>\s*'([^']+)'`,
-		}
+			"onchange": `'(?:onChange|onchange)'\s*=>\s*'([^']+)'`,
+		},
+	}
 
-		for attr, pattern := range attrPatterns {
-			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-				value := re.FindStringSubmatch(attrs)[1]
-				if attr == "onChange" || attr == "onchange" {
-					extraAttrs += fmt.Sprintf(` onchange="%s"`, value)
-				} else {
-					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
-				}
-			}
-		}
+	extraAttrs := ""
+	if len(params) > 3 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[3])
 	}
 
 	selectHTML := fmt.Sprintf(`<select name="%s"%s>
@@ -735,7 +746,7 @@ func replaceFormCheckbox(text string) string {
 	}
 
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			params := extractParams(re.FindStringSubmatch(match)[1])
 			return processFormCheckbox(params)
@@ -760,37 +771,20 @@ func processFormCheckbox(params []string) string {
 		checked = params[2]
 	}
 
-	extraAttrs := ""
-	if len(params) > 3 {
-		attrs := params[3]
-
-		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
-		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
-		attrOrder := []string{"class", "id", "style", "disabled"}
-		attrPatterns := map[string]string{
+	// 属性処理の統一
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"class", "id", "style", "disabled"},
+		Patterns: map[string]string{
 			"class":    `'class'\s*=>\s*'([^']+)'`,
 			"id":       `'id'\s*=>\s*'([^']+)'`,
 			"style":    `'style'\s*=>\s*'([^']+)'`,
 			"disabled": `'disabled'\s*=>\s*'([^']*)'`,
-		}
+		},
+	}
 
-		// 定義した順序に従って属性を処理し、常に同じ順序でHTML属性を出力
-		for _, attr := range attrOrder {
-			pattern := attrPatterns[attr]
-			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-				attrValue := re.FindStringSubmatch(attrs)[1]
-				if attr == "disabled" {
-					// HTML5では disabled 属性は値なしのブール属性として扱う
-					if attrValue == "" || attrValue == "disabled" {
-						extraAttrs += " disabled"
-					} else {
-						extraAttrs += fmt.Sprintf(` %s="%s"`, attr, attrValue)
-					}
-				} else {
-					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, attrValue)
-				}
-			}
-		}
+	extraAttrs := ""
+	if len(params) > 3 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[3])
 	}
 
 	// 配列形式の名前かどうかで処理を分岐（Laravel の配列形式サポートのため）
@@ -809,7 +803,7 @@ func replaceFormSubmit(text string) string {
 	}
 
 	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
 			params := extractParams(re.FindStringSubmatch(match)[1])
 			return processFormSubmit(params)
@@ -829,37 +823,21 @@ func processFormSubmit(params []string) string {
 		textParam = ""
 	}
 
-	extraAttrs := ""
-	if len(params) > 1 {
-		attrs := params[1]
-
-		// Goのmapは反復順序が非決定的なため、テストで期待値と出力順序が一致しない
-		// 配列を使って属性の出力順序を固定し、一貫した HTML 出力を保証する
-		attrOrder := []string{"class", "id", "style", "onclick", "disabled"}
-		attrPatterns := map[string]string{
+	// 属性処理の統一
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"class", "id", "style", "onclick", "disabled"},
+		Patterns: map[string]string{
 			"class":    `'class'\s*=>\s*'([^']+)'`,
 			"id":       `'id'\s*=>\s*'([^']+)'`,
 			"style":    `'style'\s*=>\s*'([^']+)'`,
 			"onclick":  `'onclick'\s*=>\s*'([^']+)'`,
 			"disabled": `'disabled'\s*=>\s*'([^']*)'`,
-		}
+		},
+	}
 
-		// 定義した順序に従って属性を処理し、常に同じ順序でHTML属性を出力
-		for _, attr := range attrOrder {
-			pattern := attrPatterns[attr]
-			if re := regexp.MustCompile(pattern); re.MatchString(attrs) {
-				value := re.FindStringSubmatch(attrs)[1]
-				if attr == "disabled" {
-					if value == "" || value == "disabled" {
-						extraAttrs += " disabled"
-					} else {
-						extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
-					}
-				} else {
-					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, value)
-				}
-			}
-		}
+	extraAttrs := ""
+	if len(params) > 1 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[1])
 	}
 
 	return fmt.Sprintf(`<button type="submit"%s>%s</button>`, extraAttrs, textParam)
@@ -868,7 +846,7 @@ func processFormSubmit(params []string) string {
 func extractParamsAdvanced(paramsStr string) []string {
 	paramsStr = strings.ReplaceAll(paramsStr, "\n", " ")
 	paramsStr = strings.ReplaceAll(paramsStr, "\t", " ")
-	re := regexp.MustCompile(`\s+`)
+	re := regexCache.GetRegex(`\s+`)
 	paramsStr = re.ReplaceAllString(paramsStr, " ")
 	paramsStr = strings.TrimSpace(paramsStr)
 	return extractParams(paramsStr)
