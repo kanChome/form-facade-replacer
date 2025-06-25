@@ -208,20 +208,35 @@ func DetectArrayHelper(value string) bool {
 	return regexCache.GetRegex(`(?i)^(old|session|request|input)\s*\(`).MatchString(strings.TrimSpace(value))
 }
 
+// IsArrayFieldName 配列形式のフィールド名かどうかを判定
+func IsArrayFieldName(fieldName string) bool {
+	return regexCache.GetRegex(`\[.*\]`).MatchString(fieldName)
+}
+
 func FormatValueAttribute(value string) string {
-	if DetectArrayHelper(value) {
-		return fmt.Sprintf("{!! json_encode(%s) !!}", value)
+	// 空値、null、空文字の場合は空文字を返す
+	trimmedValue := strings.TrimSpace(value)
+	if trimmedValue == "" || trimmedValue == "null" || trimmedValue == "''" || trimmedValue == `""` {
+		return ""
 	}
+	
+	// 通常のBlade出力を使用（Form::hiddenと一貫した動作）
 	return fmt.Sprintf("{{ %s }}", value)
 }
 
 // FormatHiddenValueAttribute hidden input専用の値フォーマット
-func FormatHiddenValueAttribute(value string) string {
+func FormatHiddenValueAttribute(value string, fieldName string) string {
 	trimmedValue := strings.TrimSpace(value)
 	if trimmedValue == "" || trimmedValue == "null" || trimmedValue == "''" || trimmedValue == `""` {
 		return ""
 	}
 
+	// 配列フィールドの場合は文字列結合形式を使用
+	if IsArrayFieldName(fieldName) {
+		return fmt.Sprintf("{{ is_array(%s) ? implode(',', %s) : %s }}", value, value, value)
+	}
+
+	// 通常フィールドの場合は通常のBlade出力
 	return fmt.Sprintf("{{ %s }}", value)
 }
 
@@ -427,7 +442,7 @@ func processFormHidden(params []string) string {
 	}
 
 	// hidden input専用の値フォーマット
-	formattedValue := FormatHiddenValueAttribute(value)
+	formattedValue := FormatHiddenValueAttribute(value, nameAttr)
 	return fmt.Sprintf(`<input type="hidden" name="%s" value="%s"%s>`, nameAttr, formattedValue, extraAttrs)
 }
 
@@ -534,10 +549,11 @@ func processFormTextarea(params []string) string {
 		return fmt.Sprintf(`<textarea name="%s"%s></textarea>`, name, extraAttrs)
 	}
 
-	if DetectArrayHelper(value) {
-		return fmt.Sprintf(`<textarea name="%s"%s>{!! json_encode(%s) !!}</textarea>`, name, extraAttrs, value)
+	formattedValue := FormatValueAttribute(value)
+	if formattedValue == "" {
+		return fmt.Sprintf(`<textarea name="%s"%s></textarea>`, name, extraAttrs)
 	}
-	return fmt.Sprintf(`<textarea name="%s"%s>{{ %s }}</textarea>`, name, extraAttrs, value)
+	return fmt.Sprintf(`<textarea name="%s"%s>%s</textarea>`, name, extraAttrs, formattedValue)
 }
 
 func replaceFormLabel(text string) string {

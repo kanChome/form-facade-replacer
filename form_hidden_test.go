@@ -28,7 +28,7 @@ func TestFormHidden(t *testing.T) {
 		{
 			name:     "Hidden field with array name",
 			input:    "{!! Form::hidden('time_ids[]', $timeId) !!}",
-			expected: `<input type="hidden" name="time_ids[]" value="{{ $timeId }}">`,
+			expected: `<input type="hidden" name="time_ids[]" value="{{ is_array($timeId) ? implode(',', $timeId) : $timeId }}">`,
 		},
 		{
 			name:     "Hidden field with old() helper",
@@ -38,7 +38,7 @@ func TestFormHidden(t *testing.T) {
 		{
 			name:     "Hidden field with array name and old() helper",
 			input:    "{!! Form::hidden('time_ids[]', old('time_ids')) !!}",
-			expected: `<input type="hidden" name="time_ids[]" value="{{ old('time_ids') }}">`,
+			expected: `<input type="hidden" name="time_ids[]" value="{{ is_array(old('time_ids')) ? implode(',', old('time_ids')) : old('time_ids') }}">`,
 		},
 		{
 			name:     "Hidden field with session() helper",
@@ -78,27 +78,32 @@ func TestFormHidden(t *testing.T) {
 		{
 			name:     "Hidden field with complex array name",
 			input:    "{!! Form::hidden('users[0][name]', $user->name) !!}",
-			expected: `<input type="hidden" name="users[0][name]" value="{{ $user->name }}">`,
+			expected: `<input type="hidden" name="users[0][name]" value="{{ is_array($user->name) ? implode(',', $user->name) : $user->name }}">`,
 		},
 		{
 			name:     "Hidden field with old() and array name",
 			input:    "{!! Form::hidden('users[]', old('users.0.name')) !!}",
-			expected: `<input type="hidden" name="users[]" value="{{ old('users.0.name') }}">`,
+			expected: `<input type="hidden" name="users[]" value="{{ is_array(old('users.0.name')) ? implode(',', old('users.0.name')) : old('users.0.name') }}">`,
 		},
 		{
 			name:     "Hidden field with multiple attributes and old()",
 			input:    "{!! Form::hidden('data[]', old('data'), ['class' => 'hidden-data', 'id' => 'data-field']) !!}",
-			expected: `<input type="hidden" name="data[]" value="{{ old('data') }}" id="data-field" class="hidden-data">`,
+			expected: `<input type="hidden" name="data[]" value="{{ is_array(old('data')) ? implode(',', old('data')) : old('data') }}" id="data-field" class="hidden-data">`,
 		},
 		{
 			name:     "Hidden field with old() and default value",
 			input:    "{!! Form::hidden('time_ids[]', old('time_ids', $timeIds)) !!}",
-			expected: `<input type="hidden" name="time_ids[]" value="{{ old('time_ids', $timeIds) }}">`,
+			expected: `<input type="hidden" name="time_ids[]" value="{{ is_array(old('time_ids', $timeIds)) ? implode(',', old('time_ids', $timeIds)) : old('time_ids', $timeIds) }}">`,
 		},
 		{
 			name:     "Hidden field with double quoted empty string",
 			input:    `{{ Form::hidden('user_id', "") }}`,
 			expected: `<input type="hidden" name="user_id" value="">`,
+		},
+		{
+			name:     "Hidden field with nested array field name",
+			input:    `{{ Form::hidden('data[user][profile][name]', $profile->name) }}`,
+			expected: `<input type="hidden" name="data[user][profile][name]" value="{{ is_array($profile->name) ? implode(',', $profile->name) : $profile->name }}">`,
 		},
 	}
 

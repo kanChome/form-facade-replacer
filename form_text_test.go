@@ -13,7 +13,7 @@ func TestFormText(t *testing.T) {
 		{
 			name:     "Basic text field",
 			input:    "{{ Form::text('name') }}",
-			expected: `<input type="text" name="name" value="{{  }}">`,
+			expected: `<input type="text" name="name" value="">`,
 		},
 		{
 			name:     "Text field with value",
@@ -38,47 +38,47 @@ func TestFormText(t *testing.T) {
 		{
 			name:     "Text field with old() helper",
 			input:    "{{ Form::text('name', old('name')) }}",
-			expected: `<input type="text" name="name" value="{!! json_encode(old('name')) !!}">`,
+			expected: `<input type="text" name="name" value="{{ old('name') }}">`,
 		},
 		{
 			name:     "Text field with session() helper",
 			input:    "{{ Form::text('data', session('form_data')) }}",
-			expected: `<input type="text" name="data" value="{!! json_encode(session('form_data')) !!}">`,
+			expected: `<input type="text" name="data" value="{{ session('form_data') }}">`,
 		},
 		{
 			name:     "Text field with request() helper",
 			input:    "{{ Form::text('search', request('q')) }}",
-			expected: `<input type="text" name="search" value="{!! json_encode(request('q')) !!}">`,
+			expected: `<input type="text" name="search" value="{{ request('q') }}">`,
 		},
 		{
 			name:     "Text field with input() helper",
 			input:    "{{ Form::text('query', input('search_term')) }}",
-			expected: `<input type="text" name="query" value="{!! json_encode(input('search_term')) !!}">`,
+			expected: `<input type="text" name="query" value="{{ input('search_term') }}">`,
 		},
 		{
 			name:     "Text field with uppercase OLD() helper",
 			input:    "{{ Form::text('name', OLD('name')) }}",
-			expected: `<input type="text" name="name" value="{!! json_encode(OLD('name')) !!}">`,
+			expected: `<input type="text" name="name" value="{{ OLD('name') }}">`,
 		},
 		{
 			name:     "Text field with spaced old() helper",
 			input:    "{{ Form::text('email', old ('email')) }}",
-			expected: `<input type="text" name="email" value="{!! json_encode(old ('email')) !!}">`,
+			expected: `<input type="text" name="email" value="{{ old ('email') }}">`,
 		},
 		{
 			name:     "Text field with old() and attributes",
 			input:    "{{ Form::text('name', old('name'), ['class' => 'form-control', 'placeholder' => 'Your name']) }}",
-			expected: `<input type="text" name="name" value="{!! json_encode(old('name')) !!}" placeholder="Your name" class="form-control">`,
+			expected: `<input type="text" name="name" value="{{ old('name') }}" placeholder="Your name" class="form-control">`,
 		},
 		{
 			name:     "Text field with null value",
 			input:    "{{ Form::text('description', null) }}",
-			expected: `<input type="text" name="description" value="{{ null }}">`,
+			expected: `<input type="text" name="description" value="">`,
 		},
 		{
 			name:     "Text field with empty string value",
 			input:    "{{ Form::text('title', '') }}",
-			expected: `<input type="text" name="title" value="{{ '' }}">`,
+			expected: `<input type="text" name="title" value="">`,
 		},
 		{
 			name:     "Text field with double exclamation marks",
@@ -88,7 +88,7 @@ func TestFormText(t *testing.T) {
 		{
 			name:     "Text field with double exclamation marks and old()",
 			input:    "{!! Form::text('tags', old('tags')) !!}",
-			expected: `<input type="text" name="tags" value="{!! json_encode(old('tags')) !!}">`,
+			expected: `<input type="text" name="tags" value="{{ old('tags') }}">`,
 		},
 		{
 			name:     "Text field with double exclamation marks and attributes",
@@ -108,7 +108,7 @@ func TestFormText(t *testing.T) {
 		{
 			name:     "Text field with old() and array name",
 			input:    "{{ Form::text('items[]', old('items.0')) }}",
-			expected: `<input type="text" name="items[]" value="{!! json_encode(old('items.0')) !!}">`,
+			expected: `<input type="text" name="items[]" value="{{ old('items.0') }}">`,
 		},
 	}
 
@@ -133,7 +133,7 @@ func TestProcessFormInput(t *testing.T) {
 			name:      "Basic text input",
 			inputType: "text",
 			params:    []string{"'name'"},
-			expected:  `<input type="text" name="name" value="{{  }}">`,
+			expected:  `<input type="text" name="name" value="">`,
 		},
 		{
 			name:      "Text input with value",
@@ -151,7 +151,7 @@ func TestProcessFormInput(t *testing.T) {
 			name:      "Text input with old() helper",
 			inputType: "text",
 			params:    []string{"'name'", "old('name')"},
-			expected:  `<input type="text" name="name" value="{!! json_encode(old('name')) !!}">`,
+			expected:  `<input type="text" name="name" value="{{ old('name') }}">`,
 		},
 		{
 			name:      "Email input type",
@@ -163,7 +163,7 @@ func TestProcessFormInput(t *testing.T) {
 			name:      "Password input type",
 			inputType: "password",
 			params:    []string{"'password'"},
-			expected:  `<input type="password" name="password" value="{{  }}">`,
+			expected:  `<input type="password" name="password" value="">`,
 		},
 	}
 
