@@ -13,7 +13,7 @@ func TestFormHidden(t *testing.T) {
 		{
 			name:     "Basic hidden field",
 			input:    "{{ Form::hidden('user_id') }}",
-			expected: `<input type="hidden" name="user_id" value="{{  }}">`,
+			expected: `<input type="hidden" name="user_id" value="">`,
 		},
 		{
 			name:     "Hidden field with value",
@@ -58,12 +58,12 @@ func TestFormHidden(t *testing.T) {
 		{
 			name:     "Hidden field with null value",
 			input:    "{{ Form::hidden('user_id', null) }}",
-			expected: `<input type="hidden" name="user_id" value="{{ null }}">`,
+			expected: `<input type="hidden" name="user_id" value="">`,
 		},
 		{
 			name:     "Hidden field with empty string value",
 			input:    "{{ Form::hidden('user_id', '') }}",
-			expected: `<input type="hidden" name="user_id" value="{{ '' }}">`,
+			expected: `<input type="hidden" name="user_id" value="">`,
 		},
 		{
 			name:     "Hidden field with uppercase OLD() helper",
@@ -94,6 +94,11 @@ func TestFormHidden(t *testing.T) {
 			name:     "Hidden field with old() and default value",
 			input:    "{!! Form::hidden('time_ids[]', old('time_ids', $timeIds)) !!}",
 			expected: `<input type="hidden" name="time_ids[]" value="{{ old('time_ids', $timeIds) }}">`,
+		},
+		{
+			name:     "Hidden field with double quoted empty string",
+			input:    `{{ Form::hidden('user_id', "") }}`,
+			expected: `<input type="hidden" name="user_id" value="">`,
 		},
 	}
 

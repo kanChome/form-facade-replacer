@@ -217,7 +217,11 @@ func FormatValueAttribute(value string) string {
 
 // FormatHiddenValueAttribute hidden input専用の値フォーマット
 func FormatHiddenValueAttribute(value string) string {
-	// hidden inputでは基本的に通常のBlade出力を使用
+	trimmedValue := strings.TrimSpace(value)
+	if trimmedValue == "" || trimmedValue == "null" || trimmedValue == "''" || trimmedValue == `""` {
+		return ""
+	}
+
 	return fmt.Sprintf("{{ %s }}", value)
 }
 
