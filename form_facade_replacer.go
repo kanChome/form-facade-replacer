@@ -631,19 +631,154 @@ func replaceFormText(text string) string {
 }
 
 func replaceFormFile(text string) string {
+	// より複雑なネストに対応したパターン
+	// {!! Form::file(...) !!} と {{ Form::file(...) }} の両方に対応
 	patterns := []string{
-		`\{\!\!\s*Form::file\(\s*([^}]+)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::file\(\s*([^}]+)\s*\)\s*\}\}`,
+		`\{\!\!\s*Form::file\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::file\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			params := extractParams(re.FindStringSubmatch(match)[1])
-			return processFormFile(params)
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				params := extractParamsBalanced(paramStr)
+				return processFormFile(params)
+			}
+			return match
 		})
 	}
 	return text
+}
+
+// extractParamsBalanced ネストした構造を考慮したパラメータ抽出
+func extractParamsBalanced(paramsStr string) []string {
+	var params []string
+	var current strings.Builder
+	var parenCount, bracketCount, braceCount int
+	var inQuotes bool
+	var quoteChar rune
+	var escapeNext bool
+
+	for _, char := range paramsStr {
+		if escapeNext {
+			current.WriteRune(char)
+			escapeNext = false
+			continue
+		}
+
+		if char == '\\' && inQuotes {
+			current.WriteRune(char)
+			escapeNext = true
+			continue
+		}
+
+		if !inQuotes && (char == '"' || char == '\'') {
+			inQuotes = true
+			quoteChar = char
+		} else if inQuotes && char == quoteChar {
+			inQuotes = false
+			quoteChar = 0
+		}
+
+		if !inQuotes {
+			switch char {
+			case '(':
+				parenCount++
+			case ')':
+				parenCount--
+			case '[':
+				bracketCount++
+			case ']':
+				bracketCount--
+			case '{':
+				braceCount++
+			case '}':
+				braceCount--
+			case ',':
+				if parenCount == 0 && bracketCount == 0 && braceCount == 0 {
+					params = append(params, strings.TrimSpace(current.String()))
+					current.Reset()
+					continue
+				}
+			}
+		}
+
+		current.WriteRune(char)
+	}
+
+	if current.Len() > 0 {
+		params = append(params, strings.TrimSpace(current.String()))
+	}
+
+	return params
+}
+
+// convertJavaScriptStringLiterals JavaScript文字列リテラル内のダブルクォートをシングルクォートに変換
+func convertJavaScriptStringLiterals(jsCode string) string {
+	result := jsCode
+
+	// より柔軟なアプローチ: ダブルクォートで囲まれた部分を特定して変換
+	// エスケープされたクォートも含めて、正しく処理する
+
+	// パターン1: JSON-like文字列を先に処理 "{\"key\": \"value\"}"
+	jsonStringPattern := `"(\{(?:[^"\\]|\\.)*\})"`
+	jsonRe := regexCache.GetRegex(jsonStringPattern)
+	result = jsonRe.ReplaceAllString(result, "'$1'")
+
+	// パターン2: エスケープを含む文字列リテラル "Say \"Hello\""
+	// 完全なエスケープ対応パターン
+	escapedStringPattern := `"((?:[^"\\]|\\.)*)"`
+	escapedRe := regexCache.GetRegex(escapedStringPattern)
+	result = escapedRe.ReplaceAllString(result, "'$1'")
+
+	return result
+}
+
+// convertEventHandlerQuotesInHTML HTML出力内のイベントハンドラ属性のダブルクォートを柔軟に変換
+func convertEventHandlerQuotesInHTML(html string) string {
+	result := html
+
+	// onchange属性の処理
+	// パターン: onchange="JavaScript code with "quotes""
+	onchangePattern := `(onchange=")([^"]*(?:"[^"]*)*)(")`
+	onchangeRe := regexCache.GetRegex(onchangePattern)
+
+	result = onchangeRe.ReplaceAllStringFunc(result, func(match string) string {
+		matches := onchangeRe.FindStringSubmatch(match)
+		if len(matches) >= 4 {
+			prefix := matches[1] // onchange="
+			jsCode := matches[2] // JavaScript コード部分（内部にダブルクォートを含む可能性）
+			suffix := matches[3] // 最後の "
+
+			// JavaScript内の文字列リテラルを変換
+			convertedJS := convertJavaScriptStringLiterals(jsCode)
+			return prefix + convertedJS + suffix
+		}
+		return match
+	})
+
+	// onclick属性の処理
+	onclickPattern := `(onclick=")([^"]*(?:"[^"]*)*)(")`
+	onclickRe := regexCache.GetRegex(onclickPattern)
+
+	result = onclickRe.ReplaceAllStringFunc(result, func(match string) string {
+		matches := onclickRe.FindStringSubmatch(match)
+		if len(matches) >= 4 {
+			prefix := matches[1] // onclick="
+			jsCode := matches[2] // JavaScript コード部分
+			suffix := matches[3] // 最後の "
+
+			// JavaScript内の文字列リテラルを変換
+			convertedJS := convertJavaScriptStringLiterals(jsCode)
+			return prefix + convertedJS + suffix
+		}
+		return match
+	})
+
+	return result
 }
 
 func processFormFile(params []string) string {
@@ -685,7 +820,13 @@ func processFormFile(params []string) string {
 		extraAttrs = attrProcessor.ProcessAttributes(params[1])
 	}
 
-	return fmt.Sprintf(`<input type="file" name="%s"%s%s>`, name, extraAttrs, multipleAttr)
+	// HTML出力を生成
+	result := fmt.Sprintf(`<input type="file" name="%s"%s%s>`, name, extraAttrs, multipleAttr)
+
+	// onchange/onclick属性のダブルクォート変換を最終出力に適用
+	result = convertEventHandlerQuotesInHTML(result)
+
+	return result
 }
 
 func replaceFormNumber(text string) string {
