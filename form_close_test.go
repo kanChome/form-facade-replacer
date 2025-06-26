@@ -46,7 +46,7 @@ func TestReplaceFormClose(t *testing.T) {
 			expected: `</form> some content </form>`,
 		},
 		{
-			name:     "Form::close() in HTML context",
+			name: "Form::close() in HTML context",
 			input: `<div class="form-container">
     {!! Form::open(['route' => 'test']) !!}
         <input type="text" name="field">
@@ -69,15 +69,15 @@ func TestReplaceFormClose(t *testing.T) {
 			expected: `{!! Form::open() !!} content </form> more content </form>`,
 		},
 		{
-			name:     "Form::close() with newlines",
+			name: "Form::close() with newlines",
 			input: `{!! 
     Form::close() 
 !!}`,
 			expected: `</form>`,
 		},
 		{
-			name:     "Form::close() with tabs and spaces",
-			input:    `{!!	 Form::close() 	!!}`,
+			name: "Form::close() with tabs and spaces",
+			input: `{!!	 Form::close() 	!!}`,
 			expected: `</form>`,
 		},
 		{
@@ -209,7 +209,7 @@ func TestReplaceFormClosePerformance(t *testing.T) {
 	}
 
 	result := replaceFormClose(largeText)
-	
+
 	// 正しく置換されているかチェック
 	expectedCount := 1000
 	actualCount := 0
@@ -218,7 +218,7 @@ func TestReplaceFormClosePerformance(t *testing.T) {
 			actualCount++
 		}
 	}
-	
+
 	if actualCount != expectedCount {
 		t.Errorf("Expected %d </form> tags, got %d", expectedCount, actualCount)
 	}
