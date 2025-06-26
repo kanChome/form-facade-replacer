@@ -219,7 +219,7 @@ func FormatValueAttribute(value string) string {
 	if trimmedValue == "" || trimmedValue == "null" || trimmedValue == "''" || trimmedValue == `""` {
 		return ""
 	}
-	
+
 	// 通常のBlade出力を使用（Form::hiddenと一貫した動作）
 	return fmt.Sprintf("{{ %s }}", value)
 }
@@ -277,6 +277,7 @@ func replaceFormPatterns(filePath string) error {
 	text = replaceFormSelect(text)
 	text = replaceFormCheckbox(text)
 	text = replaceFormSubmit(text)
+	text = replaceFormFile(text)
 
 	return os.WriteFile(filePath, []byte(text), 0644)
 }
@@ -627,6 +628,64 @@ func replaceFormText(text string) string {
 		})
 	}
 	return text
+}
+
+func replaceFormFile(text string) string {
+	patterns := []string{
+		`\{\!\!\s*Form::file\(\s*([^}]+)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::file\(\s*([^}]+)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			params := extractParams(re.FindStringSubmatch(match)[1])
+			return processFormFile(params)
+		})
+	}
+	return text
+}
+
+func processFormFile(params []string) string {
+	if len(params) < 1 {
+		return ""
+	}
+
+	name := strings.Trim(params[0], `'"`)
+
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"accept", "capture", "class", "id", "onchange", "onclick"},
+		Patterns: map[string]string{
+			"accept":   `'accept'\s*=>\s*'([^']+)'`,
+			"capture":  `'capture'\s*=>\s*'([^']+)'`,
+			"id":       `'id'\s*=>\s*'([^']+)'`,
+			"class":    `'class'\s*=>\s*'([^']+)'`,
+			"onchange": `'onchange'\s*=>\s*'([^']+)'`,
+			"onclick":  `'onclick'\s*=>\s*'([^']+)'`,
+		},
+	}
+
+	extraAttrs := ""
+	multipleAttr := ""
+
+	if len(params) > 1 {
+		// multiple属性の特別処理（先に処理）
+		multiplePattern := `'multiple'\s*=>\s*(true|false|\d+)`
+		if re := regexCache.GetRegex(multiplePattern); re.MatchString(params[1]) {
+			matches := re.FindStringSubmatch(params[1])
+			if len(matches) > 1 {
+				val := matches[1]
+				if val == "true" {
+					multipleAttr = " multiple"
+				}
+				// false や 0 の場合は何も追加しない
+			}
+		}
+
+		extraAttrs = attrProcessor.ProcessAttributes(params[1])
+	}
+
+	return fmt.Sprintf(`<input type="file" name="%s"%s%s>`, name, extraAttrs, multipleAttr)
 }
 
 func replaceFormNumber(text string) string {
