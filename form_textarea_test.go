@@ -85,6 +85,16 @@ func TestFormTextarea(t *testing.T) {
 			input:    "{!! Form::textarea('body', old('body'), ['class' => 'editor', 'placeholder' => 'Enter content']) !!}",
 			expected: `<textarea name="body" placeholder="Enter content" class="editor">{{ old('body') }}</textarea>`,
 		},
+		{
+			name:     "Textarea with PHP string concatenation",
+			input:    `{{ Form::textarea('comments[' . $i . '][content]', old('comments[' . $i . '][content]'), ['rows' => 4, 'class' => 'comment-input']) }}`,
+			expected: `<textarea name="comments[{{ $i }}][content]" rows="4" class="comment-input">{{ old('comments[' . $i . '][content]') }}</textarea>`,
+		},
+		{
+			name:     "Textarea with complex PHP string concatenation",
+			input:    `{{ Form::textarea('data[' . $row['id'] . '][description]', $descriptions[$row['id']] ?? '', ['placeholder' => 'Enter description', 'rows' => 3]) }}`,
+			expected: `<textarea name="data[{{ $row['id'] }}][description]" rows="3" placeholder="Enter description">{{ $descriptions[$row['id']] ?? '' }}</textarea>`,
+		},
 	}
 
 	for _, tt := range tests {

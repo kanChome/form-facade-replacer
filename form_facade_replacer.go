@@ -213,6 +213,41 @@ func IsArrayFieldName(fieldName string) bool {
 	return regexCache.GetRegex(`\[.*\]`).MatchString(fieldName)
 }
 
+// ProcessFieldName PHP文字列連結を含むフィールド名をBlade構文に変換
+func ProcessFieldName(name string) string {
+	// まず全体から外側のクォートを除去
+	nameAttr := strings.Trim(name, `'"`)
+	
+	// PHP文字列連結パターンを検出して変換
+	if strings.Contains(nameAttr, " . ") {
+		// パターン1: 'prefix' . $variable . 'suffix' (標準パターン)
+		// 変数部分が単一引用符を含む場合に対応
+		concatPattern1 := `^'([^']*)'\s*\.\s*(.+?)\s*\.\s*'([^']*)'$`
+		re1 := regexCache.GetRegex(concatPattern1)
+		
+		if matches := re1.FindStringSubmatch(nameAttr); len(matches) == 4 {
+			prefix := matches[1]
+			variable := strings.TrimSpace(matches[2])
+			suffix := matches[3]
+			return fmt.Sprintf("%s{{ %s }}%s", prefix, variable, suffix)
+		}
+		
+		// パターン2: prefix[' . $variable . ']suffix (埋め込みパターン)
+		// 変数部分が単一引用符を含む場合に対応
+		concatPattern2 := `^([^']*\[)'\s*\.\s*(.+?)\s*\.\s*'(\][^']*)$`
+		re2 := regexCache.GetRegex(concatPattern2)
+		
+		if matches := re2.FindStringSubmatch(nameAttr); len(matches) == 4 {
+			prefix := matches[1]
+			variable := strings.TrimSpace(matches[2])
+			suffix := matches[3]
+			return fmt.Sprintf("%s{{ %s }}%s", prefix, variable, suffix)
+		}
+	}
+	
+	return nameAttr
+}
+
 func FormatValueAttribute(value string) string {
 	// 空値、null、空文字の場合は空文字を返す
 	trimmedValue := strings.TrimSpace(value)
@@ -406,26 +441,11 @@ func processFormHidden(params []string) string {
 		return ""
 	}
 
-	name := strings.Trim(params[0], `'"`)
+	// PHP文字列連結を含むフィールド名を適切に処理
+	nameAttr := ProcessFieldName(params[0])
 	value := ""
 	if len(params) > 1 {
 		value = params[1]
-	}
-
-	nameAttr := name
-	if strings.Contains(name, " . ") {
-		patterns := []string{
-			`^'([^']*)'\\s*\\.\\s*([^'\\s]+(?:\\[[^\\]]*\\]\\[[^\\]]*\\])?)\\s*\\.\\s*'([^']*)'$`,
-			`^'([^']*)'\\s*\\.\\s*(.+?)\\s*\\.\\s*'([^']*)'$`,
-		}
-
-		for _, pattern := range patterns {
-			re := regexCache.GetRegex(pattern)
-			if matches := re.FindStringSubmatch(name); len(matches) == 4 {
-				nameAttr = fmt.Sprintf("%s{{ %s }}%s", matches[1], matches[2], matches[3])
-				break
-			}
-		}
 	}
 
 	// 属性処理の統一
@@ -504,15 +524,22 @@ func processFormButton(textParam, attrs string) string {
 }
 
 func replaceFormTextarea(text string) string {
+	// 複雑なネストに対応したパターンに変更
 	patterns := []string{
-		`\{\!\!\s*Form::textarea\(\s*([^}]+)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::textarea\(\s*([^}]+)\s*\)\s*\}\}`,
+		`\{\!\!\s*Form::textarea\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::textarea\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			params := extractParams(re.FindStringSubmatch(match)[1])
-			return processFormTextarea(params)
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormTextarea(params)
+			}
+			return match
 		})
 	}
 
@@ -523,7 +550,8 @@ func processFormTextarea(params []string) string {
 	if len(params) < 1 {
 		return ""
 	}
-	name := strings.Trim(params[0], `'"`)
+	// PHP文字列連結を含むフィールド名を適切に処理
+	name := ProcessFieldName(params[0])
 	value := ""
 
 	if len(params) > 1 {
@@ -558,16 +586,23 @@ func processFormTextarea(params []string) string {
 }
 
 func replaceFormLabel(text string) string {
+	// 複雑なネストに対応したパターンに変更
 	patterns := []string{
-		`\{\!\!\s*Form::label\(\s*([^}]+)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::label\(\s*([^}]+)\s*\)\s*\}\}`,
+		`\{\!\!\s*Form::label\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::label\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			params := extractParams(re.FindStringSubmatch(match)[1])
-			return processFormLabel(params)
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormLabel(params)
+			}
+			return match
 		})
 	}
 	return text
@@ -578,7 +613,8 @@ func processFormLabel(params []string) string {
 		return ""
 	}
 
-	name := strings.Trim(params[0], `'"`)
+	// PHP文字列連結を含むフィールド名を適切に処理
+	name := ProcessFieldName(params[0])
 	forAttr := name // デフォルトでは名前をfor属性に使用
 	textParam := ""
 
@@ -615,16 +651,23 @@ func processFormLabel(params []string) string {
 }
 
 func replaceFormText(text string) string {
+	// 複雑なネストに対応したパターンに変更
 	patterns := []string{
-		`\{\!\!\s*Form::text\(\s*([^}]+)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::text\(\s*([^}]+)\s*\)\s*\}\}`,
+		`\{\!\!\s*Form::text\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::text\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			params := extractParams(re.FindStringSubmatch(match)[1])
-			return processFormInput("text", params)
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("text", params)
+			}
+			return match
 		})
 	}
 	return text
@@ -830,16 +873,23 @@ func processFormFile(params []string) string {
 }
 
 func replaceFormNumber(text string) string {
+	// 複雑なネストに対応したパターンに変更
 	patterns := []string{
-		`\{\{\s*Form::number\(\s*([^}]+)\s*\)\s*\}\}`,
-		`\{\!\!\s*Form::number\(\s*([^}]+)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::number\(\s*(.*?)\s*\)\s*\}\}`,
+		`\{\!\!\s*Form::number\(\s*(.*?)\s*\)\s*\!\!\}`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			params := extractParams(re.FindStringSubmatch(match)[1])
-			return processFormNumber(params)
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormNumber(params)
+			}
+			return match
 		})
 	}
 	return text
@@ -850,7 +900,8 @@ func processFormNumber(params []string) string {
 		return ""
 	}
 
-	name := strings.Trim(params[0], `'"`)
+	// PHP文字列連結を含むフィールド名を適切に処理
+	name := ProcessFieldName(params[0])
 	value := ""
 	if len(params) > 1 {
 		value = params[1]
@@ -864,7 +915,7 @@ func processFormNumber(params []string) string {
 			"id":          `'id'\s*=>\s*'([^']+)'`,
 			"min":         `'min'\s*=>\s*(\d+)`,
 			"max":         `'max'\s*=>\s*(\d+)`,
-			"step":        `'step'\s*=>\s*(\d+)`,
+			"step":        `'step'\s*=>\s*(\d+(?:\.\d+)?)`,
 		},
 	}
 
@@ -891,7 +942,8 @@ func processFormInput(inputType string, params []string) string {
 		return ""
 	}
 
-	name := strings.Trim(params[0], `'"`)
+	// PHP文字列連結を含むフィールド名を適切に処理
+	name := ProcessFieldName(params[0])
 	value := ""
 	if len(params) > 1 {
 		value = params[1]
@@ -916,16 +968,23 @@ func processFormInput(inputType string, params []string) string {
 }
 
 func replaceFormSelect(text string) string {
+	// 複雑なネストに対応したパターンに変更
 	patterns := []string{
-		`\{\{\s*Form::select\(\s*([^}]+)\s*\)\s*\}\}`,
-		`\{\!\!\s*Form::select\(\s*([^}]+)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::select\(\s*(.*?)\s*\)\s*\}\}`,
+		`\{\!\!\s*Form::select\(\s*(.*?)\s*\)\s*\!\!\}`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			params := extractParams(re.FindStringSubmatch(match)[1])
-			return processFormSelect(params)
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormSelect(params)
+			}
+			return match
 		})
 	}
 	return text
@@ -936,7 +995,8 @@ func processFormSelect(params []string) string {
 		return ""
 	}
 
-	name := strings.Trim(params[0], `'"`)
+	// PHP文字列連結を含むフィールド名を適切に処理
+	name := ProcessFieldName(params[0])
 	options := params[1]
 	selected := ""
 	if len(params) > 2 {
@@ -966,16 +1026,23 @@ func processFormSelect(params []string) string {
 }
 
 func replaceFormCheckbox(text string) string {
+	// 複雑なネストに対応したパターンに変更
 	patterns := []string{
-		`\{\{\s*Form::checkbox\(\s*([^}]+)\s*\)\s*\}\}`,
-		`\{\!\!\s*Form::checkbox\(\s*([^}]+)\s*\)\s*\!\!\}`,
+		`\{\{\s*Form::checkbox\(\s*(.*?)\s*\)\s*\}\}`,
+		`\{\!\!\s*Form::checkbox\(\s*(.*?)\s*\)\s*\!\!\}`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			params := extractParams(re.FindStringSubmatch(match)[1])
-			return processFormCheckbox(params)
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormCheckbox(params)
+			}
+			return match
 		})
 	}
 	return text
@@ -986,7 +1053,8 @@ func processFormCheckbox(params []string) string {
 		return ""
 	}
 
-	name := strings.Trim(params[0], `'"`)
+	// PHP文字列連結を含むフィールド名を適切に処理
+	name := ProcessFieldName(params[0])
 	value := ""
 	if len(params) > 1 {
 		value = strings.Trim(params[1], `'"`)
@@ -1023,16 +1091,23 @@ func processFormCheckbox(params []string) string {
 }
 
 func replaceFormSubmit(text string) string {
+	// 複雑なネストに対応したパターンに変更
 	patterns := []string{
-		`(?i)\{\!\!\s*Form::submit\(\s*([^}]+)\s*\)\s*\!\!\}`,
-		`(?i)\{\{\s*Form::submit\(\s*([^}]+)\s*\)\s*\}\}`,
+		`(?i)\{\!\!\s*Form::submit\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?i)\{\{\s*Form::submit\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			params := extractParams(re.FindStringSubmatch(match)[1])
-			return processFormSubmit(params)
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormSubmit(params)
+			}
+			return match
 		})
 	}
 	return text

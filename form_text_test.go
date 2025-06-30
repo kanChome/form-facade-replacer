@@ -110,6 +110,16 @@ func TestFormText(t *testing.T) {
 			input:    "{{ Form::text('items[]', old('items.0')) }}",
 			expected: `<input type="text" name="items[]" value="{{ old('items.0') }}">`,
 		},
+		{
+			name:     "Text field with PHP string concatenation",
+			input:    `{{ Form::text('user_data[' . $i . '][name]', old('user_data[' . $i . '][name]'), ['class' => 'form-control']) }}`,
+			expected: `<input type="text" name="user_data[{{ $i }}][name]" value="{{ old('user_data[' . $i . '][name]') }}" class="form-control">`,
+		},
+		{
+			name:     "Text field with complex PHP string concatenation",
+			input:    `{{ Form::text('data[' . $row['id'] . '][value]', $values[$row['id']] ?? '', ['placeholder' => 'Enter value']) }}`,
+			expected: `<input type="text" name="data[{{ $row['id'] }}][value]" value="{{ $values[$row['id']] ?? '' }}" placeholder="Enter value">`,
+		},
 	}
 
 	for _, tt := range tests {

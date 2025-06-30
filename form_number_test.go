@@ -85,6 +85,26 @@ func TestFormNumber(t *testing.T) {
 			input:    "{!! Form::number('stars', old('stars'), ['class' => 'rating-input', 'min' => 1, 'max' => 5]) !!}",
 			expected: `<input type="number" name="stars" value="{{ old('stars') }}" class="rating-input" min="1" max="5">`,
 		},
+		{
+			name:     "Number field with PHP string concatenation (user example)",
+			input:    `{{ Form::number('sub_image[' . $i . '][priority]', old('sub_image[' . $i . '][priority]', isset($contentsData['targetData']['sub_images'][$i - 1]) ? $contentsData['targetData']['sub_images'][$i - 1]->getPriority() : null), ['placeholder' => '優先度', 'class' => 'form-control']) }}`,
+			expected: `<input type="number" name="sub_image[{{ $i }}][priority]" value="{{ old('sub_image[' . $i . '][priority]', isset($contentsData['targetData']['sub_images'][$i - 1]) ? $contentsData['targetData']['sub_images'][$i - 1]->getPriority() : null) }}" placeholder="優先度" class="form-control">`,
+		},
+		{
+			name:     "Number field with simple PHP string concatenation",
+			input:    `{{ Form::number('items[' . $index . '][quantity]', old('items[' . $index . '][quantity]'), ['min' => 1]) }}`,
+			expected: `<input type="number" name="items[{{ $index }}][quantity]" value="{{ old('items[' . $index . '][quantity]') }}" min="1">`,
+		},
+		{
+			name:     "Number field with complex nested ternary",
+			input:    `{{ Form::number('score', isset($user->profile) ? $user->profile->getScore() : ($defaultScore ?? 0), ['class' => 'score-input']) }}`,
+			expected: `<input type="number" name="score" value="{{ isset($user->profile) ? $user->profile->getScore() : ($defaultScore ?? 0) }}" class="score-input">`,
+		},
+		{
+			name:     "Number field with array access in concatenation",
+			input:    `{{ Form::number('data[' . $row['id'] . '][value]', $values[$row['id']] ?? '', ['step' => 0.01]) }}`,
+			expected: `<input type="number" name="data[{{ $row['id'] }}][value]" value="{{ $values[$row['id']] ?? '' }}" step="0.01">`,
+		},
 	}
 
 	for _, tt := range tests {
