@@ -582,9 +582,10 @@ func processFormButton(textParam, attrs string) string {
 
 func replaceFormTextarea(text string) string {
 	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
-		`\{\!\!\s*Form::textarea\(\s*(.*?)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::textarea\(\s*(.*?)\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::textarea\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::textarea\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
@@ -644,9 +645,10 @@ func processFormTextarea(params []string) string {
 
 func replaceFormLabel(text string) string {
 	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
-		`\{\!\!\s*Form::label\(\s*(.*?)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::label\(\s*(.*?)\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::label\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::label\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
@@ -709,9 +711,10 @@ func processFormLabel(params []string) string {
 
 func replaceFormText(text string) string {
 	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
-		`\{\!\!\s*Form::text\(\s*(.*?)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::text\(\s*(.*?)\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::text\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::text\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
@@ -733,9 +736,10 @@ func replaceFormText(text string) string {
 func replaceFormFile(text string) string {
 	// より複雑なネストに対応したパターン
 	// {!! Form::file(...) !!} と {{ Form::file(...) }} の両方に対応
+	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
-		`\{\!\!\s*Form::file\(\s*(.*?)\s*\)\s*\!\!\}`,
-		`\{\{\s*Form::file\(\s*(.*?)\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::file\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::file\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {
@@ -931,9 +935,10 @@ func processFormFile(params []string) string {
 
 func replaceFormNumber(text string) string {
 	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
-		`\{\{\s*Form::number\(\s*(.*?)\s*\)\s*\}\}`,
-		`\{\!\!\s*Form::number\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::number\(\s*(.*?)\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::number\(\s*(.*?)\s*\)\s*\!\!\}`,
 	}
 
 	for _, pattern := range patterns {
@@ -1026,9 +1031,10 @@ func processFormInput(inputType string, params []string) string {
 
 func replaceFormSelect(text string) string {
 	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
-		`\{\{\s*Form::select\(\s*(.*?)\s*\)\s*\}\}`,
-		`\{\!\!\s*Form::select\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::select\(\s*(.*?)\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::select\(\s*(.*?)\s*\)\s*\!\!\}`,
 	}
 
 	for _, pattern := range patterns {
@@ -1084,9 +1090,10 @@ func processFormSelect(params []string) string {
 
 func replaceFormCheckbox(text string) string {
 	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
-		`\{\{\s*Form::checkbox\(\s*(.*?)\s*\)\s*\}\}`,
-		`\{\!\!\s*Form::checkbox\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::checkbox\(\s*(.*?)\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::checkbox\(\s*(.*?)\s*\)\s*\!\!\}`,
 	}
 
 	for _, pattern := range patterns {
@@ -1149,9 +1156,10 @@ func processFormCheckbox(params []string) string {
 
 func replaceFormSubmit(text string) string {
 	// 複雑なネストに対応したパターンに変更
+	// (?i)は大文字小文字を無視、(?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
-		`(?i)\{\!\!\s*Form::submit\(\s*(.*?)\s*\)\s*\!\!\}`,
-		`(?i)\{\{\s*Form::submit\(\s*(.*?)\s*\)\s*\}\}`,
+		`(?is)\{\!\!\s*Form::submit\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?is)\{\{\s*Form::submit\(\s*(.*?)\s*\)\s*\}\}`,
 	}
 
 	for _, pattern := range patterns {

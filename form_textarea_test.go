@@ -95,6 +95,16 @@ func TestFormTextarea(t *testing.T) {
 			input:    `{{ Form::textarea('data[' . $row['id'] . '][description]', $descriptions[$row['id']] ?? '', ['placeholder' => 'Enter description', 'rows' => 3]) }}`,
 			expected: `<textarea name="data[{{ $row['id'] }}][description]" rows="3" placeholder="Enter description">{{ $descriptions[$row['id']] ?? '' }}</textarea>`,
 		},
+		{
+			name:     "Multi-line textarea",
+			input:    `{!! Form::textarea('content', old('content'), [
+    'rows' => 10,
+    'cols' => 50,
+    'placeholder' => 'Enter your content here',
+    'class' => 'form-control'
+]) !!}`,
+			expected: `<textarea name="content" cols="50" rows="10" placeholder="Enter your content here" class="form-control">{{ old('content') }}</textarea>`,
+		},
 	}
 
 	for _, tt := range tests {

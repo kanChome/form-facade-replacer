@@ -105,6 +105,16 @@ func TestFormNumber(t *testing.T) {
 			input:    `{{ Form::number('data[' . $row['id'] . '][value]', $values[$row['id']] ?? '', ['step' => 0.01]) }}`,
 			expected: `<input type="number" name="data[{{ $row['id'] }}][value]" value="{{ $values[$row['id']] ?? '' }}" step="0.01">`,
 		},
+		{
+			name:     "Multi-line number field",
+			input:    `{!! Form::number('price', old('price'), [
+    'placeholder' => '価格を入力',
+    'class' => 'form-control',
+    'min' => 0,
+    'step' => 0.01
+]) !!}`,
+			expected: `<input type="number" name="price" value="{{ old('price') }}" placeholder="価格を入力" class="form-control" min="0" step="0.01">`,
+		},
 	}
 
 	for _, tt := range tests {

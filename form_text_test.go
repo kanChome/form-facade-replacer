@@ -120,6 +120,23 @@ func TestFormText(t *testing.T) {
 			input:    `{{ Form::text('data[' . $row['id'] . '][value]', $values[$row['id']] ?? '', ['placeholder' => 'Enter value']) }}`,
 			expected: `<input type="text" name="data[{{ $row['id'] }}][value]" value="{{ $values[$row['id']] ?? '' }}" placeholder="Enter value">`,
 		},
+		{
+			name:     "Multi-line text field (user example)",
+			input:    `{!! Form::text('date', old('date', $contentsData['targetData']['date']), [
+'placeholder' => '日付を入力',
+'class' => 'form-control col-4',
+]) !!}`,
+			expected: `<input type="text" name="date" value="{{ old('date', $contentsData['targetData']['date']) }}" placeholder="日付を入力" class="form-control col-4">`,
+		},
+		{
+			name:     "Multi-line text field with complex attributes",
+			input:    `{{ Form::text('name', old('name'), [
+    'placeholder' => 'Enter your name',
+    'class' => 'form-control',
+    'id' => 'name-field'
+]) }}`,
+			expected: `<input type="text" name="name" value="{{ old('name') }}" placeholder="Enter your name" class="form-control" id="name-field">`,
+		},
 	}
 
 	for _, tt := range tests {
