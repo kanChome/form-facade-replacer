@@ -116,6 +116,12 @@ func TestReplaceFormOpen(t *testing.T) {
 {{ csrf_field() }}`,
 		},
 		{
+			name:  "Nested array access in route parameters (user example)",
+			input: `{!! Form::open(['route' => ['admin.contents_manage.store.edit.confirm', ['id' => $contentsData['targetData']['store_id']]], 'method' => 'post']) !!}`,
+			expected: `<form action="{{ route('admin.contents_manage.store.edit.confirm', ['id' => $contentsData['targetData']['store_id']]) }}" method="post">
+{{ csrf_field() }}`,
+		},
+		{
 			name:  "Double curly braces with all attributes",
 			input: `{{ Form::open(['route' => 'user.store', 'method' => 'POST', 'class' => 'form-control', 'id' => 'main-form', 'target' => '_self']) }}`,
 			expected: `<form action="{{ route('user.store') }}" method="POST" class="form-control" id="main-form" target="_self">
@@ -188,6 +194,12 @@ func TestProcessFormOpen(t *testing.T) {
 			name:  "Route with array parameters",
 			input: `'route' => ['user.update', ['id' => $user->id]], 'method' => 'PUT'`,
 			expected: `<form action="{{ route('user.update', ['id' => $user->id]) }}" method="PUT">
+{{ csrf_field() }}`,
+		},
+		{
+			name:  "Route with nested array access parameters",
+			input: `'route' => ['admin.contents_manage.store.edit.confirm', ['id' => $contentsData['targetData']['store_id']]], 'method' => 'post'`,
+			expected: `<form action="{{ route('admin.contents_manage.store.edit.confirm', ['id' => $contentsData['targetData']['store_id']]) }}" method="post">
 {{ csrf_field() }}`,
 		},
 		{

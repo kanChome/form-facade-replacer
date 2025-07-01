@@ -344,9 +344,17 @@ func processFormOpen(content string) string {
 // extractFormAction アクション属性の抽出（route、url の優先順位処理）
 func extractFormAction(content string) string {
 	// まず配列形式のroute（パラメータ付き）をチェック: 'route' => ['user.store', ['id' => 1]]
-	paramRouteRe := regexCache.GetRegex(`'route'\s*=>\s*\[\s*'([^']+)'\s*,\s*(\[[^\]]*\])`)
-	if paramMatches := paramRouteRe.FindStringSubmatch(content); len(paramMatches) > 2 {
-		return fmt.Sprintf("{{ route('%s', %s) }}", paramMatches[1], paramMatches[2])
+	// 新しいバランス型の抽出を使用して、ネストした配列アクセスも正しく処理
+	paramRouteStart := regexCache.GetRegex(`'route'\s*=>\s*\[\s*'([^']+)'\s*,\s*`)
+	if startMatch := paramRouteStart.FindStringSubmatchIndex(content); len(startMatch) > 3 {
+		routeName := content[startMatch[2]:startMatch[3]]
+		paramStart := startMatch[1] // カンマ以降の開始位置
+		
+		// パラメータ部分を抽出（バランスした括弧を考慮）
+		params := extractRouteParamsBalanced(content[paramStart:])
+		if params != "" {
+			return fmt.Sprintf("{{ route('%s', %s) }}", routeName, params)
+		}
 	}
 
 	// 次に配列形式のroute（パラメータなし）をチェック: 'route' => ['user.index']
@@ -363,6 +371,55 @@ func extractFormAction(content string) string {
 
 	// route が見つからなかった場合のみ url 処理を実行（route が優先）
 	return extractFormUrl(content)
+}
+
+// extractRouteParamsBalanced ルートパラメータをバランスした括弧で抽出
+func extractRouteParamsBalanced(content string) string {
+	var result strings.Builder
+	var bracketCount int
+	var inQuotes bool
+	var quoteChar rune
+	var escapeNext bool
+	
+	for _, char := range content {
+		if escapeNext {
+			result.WriteRune(char)
+			escapeNext = false
+			continue
+		}
+
+		if char == '\\' && inQuotes {
+			result.WriteRune(char)
+			escapeNext = true
+			continue
+		}
+
+		if !inQuotes && (char == '"' || char == '\'') {
+			inQuotes = true
+			quoteChar = char
+		} else if inQuotes && char == quoteChar {
+			inQuotes = false
+			quoteChar = 0
+		}
+
+		if !inQuotes {
+			switch char {
+			case '[':
+				bracketCount++
+			case ']':
+				bracketCount--
+				if bracketCount == 0 {
+					// 完全なパラメータ配列が見つかった
+					result.WriteRune(char)
+					return result.String()
+				}
+			}
+		}
+		
+		result.WriteRune(char)
+	}
+	
+	return ""
 }
 
 // extractFormUrl URL属性の抽出
