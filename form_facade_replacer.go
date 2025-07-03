@@ -184,7 +184,10 @@ func (ap *AttributeProcessor) ProcessAttributes(attrs string) string {
 	var extraAttrs string
 	for _, attr := range ap.Order {
 		if pattern, exists := ap.Patterns[attr]; exists {
-			if re := regexCache.GetRegex(pattern); re.MatchString(attrs) {
+			// 拡張パターンで文字列連結も含めてマッチ
+			// PHP文字列連結を含む複雑な値もキャプチャ
+			extendedPattern := strings.Replace(pattern, `'([^']+)'`, `'([^']*(?:\s*\.\s*[^,\]]*(?:\[[^\]]*\])?[^,\]]*)*)'`, -1)
+			if re := regexCache.GetRegex(extendedPattern); re.MatchString(attrs) {
 				matches := re.FindStringSubmatch(attrs)
 				var val string
 				if len(matches) > 2 && matches[2] != "" {
@@ -192,8 +195,13 @@ func (ap *AttributeProcessor) ProcessAttributes(attrs string) string {
 				} else {
 					val = matches[1] // 文字列の場合
 				}
-				// disabled属性の特別処理
-				if attr == "disabled" && (val == "" || val == "disabled") {
+
+				// PHP文字列連結を含む値を処理
+				val = processAttributeValue(val)
+
+				// disabled属性とrequired属性の特別処理
+				if (attr == "disabled" && (val == "" || val == "disabled")) ||
+					(attr == "required" && (val == "" || val == "required")) {
 					extraAttrs += fmt.Sprintf(` %s`, attr)
 				} else {
 					extraAttrs += fmt.Sprintf(` %s="%s"`, attr, val)
@@ -202,6 +210,46 @@ func (ap *AttributeProcessor) ProcessAttributes(attrs string) string {
 		}
 	}
 	return extraAttrs
+}
+
+// processAttributeValue 属性値のPHP文字列連結を処理
+func processAttributeValue(value string) string {
+	// PHP文字列連結パターンを検出して変換（ProcessFieldNameと同様のロジック）
+	if strings.Contains(value, " . ") {
+		// パターン1: 'prefix' . $variable . 'suffix'
+		concatPattern1 := `^'([^']*)'\s*\.\s*(.+?)\s*\.\s*'([^']*)'$`
+		re1 := regexCache.GetRegex(concatPattern1)
+
+		if matches := re1.FindStringSubmatch(value); len(matches) == 4 {
+			prefix := matches[1]
+			variable := strings.TrimSpace(matches[2])
+			suffix := matches[3]
+			return fmt.Sprintf("%s{{ %s }}%s", prefix, variable, suffix)
+		}
+
+		// パターン2: 'prefix' . $variable (suffix無し)
+		concatPattern2 := `^'([^']*)'\s*\.\s*(.+)$`
+		re2 := regexCache.GetRegex(concatPattern2)
+
+		if matches := re2.FindStringSubmatch(value); len(matches) == 3 {
+			prefix := matches[1]
+			variable := strings.TrimSpace(matches[2])
+			return fmt.Sprintf("%s{{ %s }}", prefix, variable)
+		}
+
+		// パターン3: PHP変数のみ（$var['key']形式）
+		// 特に $row['id'] のような複雑な変数への対応
+		concatPattern3 := `^'([^']*)'\s*\.\s*(\$[a-zA-Z_]\w*(?:\[[^\]]*\])*)\s*$`
+		re3 := regexCache.GetRegex(concatPattern3)
+
+		if matches := re3.FindStringSubmatch(value); len(matches) == 3 {
+			prefix := matches[1]
+			variable := strings.TrimSpace(matches[2])
+			return fmt.Sprintf("%s{{ %s }}", prefix, variable)
+		}
+	}
+
+	return value
 }
 
 func DetectArrayHelper(value string) bool {
@@ -253,6 +301,21 @@ func FormatValueAttribute(value string) string {
 	trimmedValue := strings.TrimSpace(value)
 	if trimmedValue == "" || trimmedValue == "null" || trimmedValue == "''" || trimmedValue == `""` {
 		return ""
+	}
+
+	// 引用符で囲まれた値の場合、中身をチェック
+	if strings.HasPrefix(trimmedValue, "'") && strings.HasSuffix(trimmedValue, "'") {
+		innerValue := strings.Trim(trimmedValue, "'")
+
+		// 純粋な数値の場合は引用符を除去
+		if regexCache.GetRegex(`^\d+(\.\d+)?$`).MatchString(innerValue) {
+			return fmt.Sprintf("{{ %s }}", innerValue)
+		}
+
+		// カラーコード（16進数）の場合は引用符を除去
+		if regexCache.GetRegex(`^#[0-9a-fA-F]{3,6}$`).MatchString(innerValue) {
+			return fmt.Sprintf("{{ %s }}", innerValue)
+		}
 	}
 
 	// 通常のBlade出力を使用（Form::hiddenと一貫した動作）
@@ -308,11 +371,14 @@ func replaceFormPatterns(filePath string) error {
 	text = replaceFormTextarea(text)
 	text = replaceFormLabel(text)
 	text = replaceFormText(text)
+	text = replaceFormInput(text)
 	text = replaceFormNumber(text)
 	text = replaceFormSelect(text)
 	text = replaceFormCheckbox(text)
 	text = replaceFormSubmit(text)
 	text = replaceFormFile(text)
+	text = replaceFormTime(text)
+	text = replaceFormRadio(text)
 
 	return os.WriteFile(filePath, []byte(text), 0644)
 }
@@ -1012,11 +1078,12 @@ func processFormInput(inputType string, params []string) string {
 	}
 
 	attrProcessor := &AttributeProcessor{
-		Order: []string{"placeholder", "class", "id"},
+		Order: []string{"placeholder", "class", "id", "required"},
 		Patterns: map[string]string{
 			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
 			"class":       `'class'\s*=>\s*'([^']+)'`,
 			"id":          `'id'\s*=>\s*'([^']+)'`,
+			"required":    `'required'\s*=>\s*'([^']*)'`,
 		},
 	}
 
@@ -1027,6 +1094,44 @@ func processFormInput(inputType string, params []string) string {
 
 	formattedValue := FormatValueAttribute(value)
 	return fmt.Sprintf(`<input type="%s" name="%s" value="%s"%s>`, inputType, name, formattedValue, extraAttrs)
+}
+
+func replaceFormInput(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::input\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::input\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormInputDynamic(params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func processFormInputDynamic(params []string) string {
+	if len(params) < 2 {
+		return ""
+	}
+
+	// 最初のパラメータからinput typeを取得
+	inputType := strings.Trim(params[0], `'"`)
+
+	// 残りのパラメータ（name, value, attributes）を processFormInput に渡す
+	remainingParams := params[1:]
+
+	return processFormInput(inputType, remainingParams)
 }
 
 func replaceFormSelect(text string) string {
@@ -1258,6 +1363,126 @@ func extractParams(paramsStr string) []string {
 	}
 
 	return params
+}
+func replaceFormTime(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::time\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::time\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("time", params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+
+func replaceFormColor(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::color\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::color\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("color", params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func replaceFormRadio(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::radio\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::radio\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormRadio(params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func processFormRadio(params []string) string {
+	if len(params) < 2 {
+		return ""
+	}
+
+	// PHP文字列連結を含むフィールド名を適切に処理
+	name := ProcessFieldName(params[0])
+
+	// 値属性の適切なフォーマット（Radioボタンは常に元の形式を保持）
+	rawValue := strings.TrimSpace(params[1])
+	var value string
+	if rawValue == "" || rawValue == "null" || rawValue == "''" || rawValue == `""` {
+		value = ""
+	} else {
+		value = fmt.Sprintf("{{ %s }}", params[1])
+	}
+
+	checked := ""
+	if len(params) > 2 {
+		checked = params[2]
+	}
+
+	// 属性処理の統一（onchangeサポート追加）
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"id", "class", "style", "onchange", "disabled"},
+		Patterns: map[string]string{
+			"id":       `'id'\s*=>\s*'([^']+)'`,
+			"class":    `'class'\s*=>\s*'([^']+)'`,
+			"style":    `'style'\s*=>\s*'([^']+)'`,
+			"onchange": `'onchange'\s*=>\s*'([^']+)'`,
+			"disabled": `'disabled'\s*=>\s*'([^']*)'`,
+		},
+	}
+
+	extraAttrs := ""
+	if len(params) > 3 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[3])
+	}
+
+	// ラジオボタンのチェック状態処理
+	checkedAttr := ""
+	if checked != "" && checked != "false" && checked != "null" {
+		checkedAttr = fmt.Sprintf(" @if(%s) checked @endif", checked)
+	}
+
+	return fmt.Sprintf(`<input type="radio" name="%s" value="%s"%s%s>`, name, value, checkedAttr, extraAttrs)
 }
 
 func printSummary(config *ReplacementConfig) {

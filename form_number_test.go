@@ -106,8 +106,8 @@ func TestFormNumber(t *testing.T) {
 			expected: `<input type="number" name="data[{{ $row['id'] }}][value]" value="{{ $values[$row['id']] ?? '' }}" step="0.01">`,
 		},
 		{
-			name:     "Multi-line number field",
-			input:    `{!! Form::number('price', old('price'), [
+			name: "Multi-line number field",
+			input: `{!! Form::number('price', old('price'), [
     'placeholder' => '価格を入力',
     'class' => 'form-control',
     'min' => 0,

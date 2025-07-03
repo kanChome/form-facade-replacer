@@ -81,8 +81,8 @@ func TestFormInput(t *testing.T) {
 			expected: `<input type="text" name="items[{{ $i }}][name]" value="{{ old('items[' . $i . '][name]') }}" class="item-name">`,
 		},
 		{
-			name:     "Multi-line input field",
-			input:    `{!! Form::input('time', 'start_time', old('start_time'), [
+			name: "Multi-line input field",
+			input: `{!! Form::input('time', 'start_time', old('start_time'), [
     'placeholder' => '開始時間',
     'class' => 'form-control',
     'id' => 'start-time-input'

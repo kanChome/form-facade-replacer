@@ -96,8 +96,8 @@ func TestFormTextarea(t *testing.T) {
 			expected: `<textarea name="data[{{ $row['id'] }}][description]" rows="3" placeholder="Enter description">{{ $descriptions[$row['id']] ?? '' }}</textarea>`,
 		},
 		{
-			name:     "Multi-line textarea",
-			input:    `{!! Form::textarea('content', old('content'), [
+			name: "Multi-line textarea",
+			input: `{!! Form::textarea('content', old('content'), [
     'rows' => 10,
     'cols' => 50,
     'placeholder' => 'Enter your content here',
