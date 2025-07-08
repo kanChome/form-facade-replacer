@@ -84,7 +84,7 @@ jobs:
       - name: Run unit tests
         run: |
           echo "🧪 Running unit tests with Go ${{ matrix.go-version }} on ${{ matrix.os }}"
-          go test -v -race -coverprofile=coverage.out ./...
+          go test -v -race -coverprofile=./coverage.out ./...
 
       - name: Display test summary
         run: |
