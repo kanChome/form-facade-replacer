@@ -76,8 +76,8 @@ func TestReplaceFormClose(t *testing.T) {
 			expected: `</form>`,
 		},
 		{
-			name: "Form::close() with tabs and spaces",
-			input: `{!!	 Form::close() 	!!}`,
+			name:     "Form::close() with tabs and spaces",
+			input:    `{!!	 Form::close() 	!!}`,
 			expected: `</form>`,
 		},
 		{
