@@ -2,104 +2,102 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
-  GO_VERSION_MATRIX: "1.16, 1.17, 1.18, 1.19, 1.20, 1.21"
+  GO_VERSION_MATRIX: "1.21"
 
 jobs:
-  # Go代码质量检查
   lint:
     name: Lint & Format Check
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
 
-    - name: Cache Go modules
-      uses: actions/cache@v3
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-    - name: Install golangci-lint
-      run: |
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-    - name: Run golangci-lint
-      run: golangci-lint run --timeout=5m --issues-exit-code=0
+      - name: Run golangci-lint
+        run: golangci-lint run --timeout=5m --issues-exit-code=0
 
-    - name: Check Go formatting
-      run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "❌ The following files are not properly formatted:"
-          gofmt -s -l .
-          echo "Please run: gofmt -s -w ."
-          exit 1
-        else
-          echo "✅ All Go files are properly formatted"
-        fi
+      - name: Check Go formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "❌ The following files are not properly formatted:"
+            gofmt -s -l .
+            echo "Please run: gofmt -s -w ."
+            exit 1
+          else
+            echo "✅ All Go files are properly formatted"
+          fi
 
-    - name: Run go vet
-      run: go vet ./...
+      - name: Run go vet
+        run: go vet ./...
 
-  # 单元测试 - 多版本Go支持
   test:
     name: Unit Tests
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ['1.16', '1.17', '1.18', '1.19', '1.20', '1.21']
+        go-version: ["1.21"]
       fail-fast: false
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Go ${{ matrix.go-version }}
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ matrix.go-version }}
+      - name: Setup Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
 
-    - name: Cache Go modules
-      uses: actions/cache@v3
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ matrix.go-version }}-
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
 
-    - name: Download dependencies
-      run: go mod download
+      - name: Download dependencies
+        run: go mod download
 
-    - name: Run unit tests
-      run: |
-        echo "🧪 Running unit tests with Go ${{ matrix.go-version }} on ${{ matrix.os }}"
-        go test -v -race -coverprofile=coverage.out ./...
+      - name: Run unit tests
+        run: |
+          echo "🧪 Running unit tests with Go ${{ matrix.go-version }} on ${{ matrix.os }}"
+          go test -v -race -coverprofile=coverage.out ./...
 
-    - name: Display test summary
-      run: |
-        echo "📊 Test Results Summary:"
-        go test -v ./... | grep -E "(PASS|FAIL|RUN)"
+      - name: Display test summary
+        run: |
+          echo "📊 Test Results Summary:"
+          go test -v ./... | grep -E "(PASS|FAIL|RUN)"
 
-    - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.out
-        flags: unittests
-        name: codecov-${{ matrix.os }}-go${{ matrix.go-version }}
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-${{ matrix.os }}-go${{ matrix.go-version }}
 
   # Blade ファイル統合テスト
   integration-tests:
@@ -108,35 +106,35 @@ jobs:
     needs: [lint]
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
 
-    - name: Cache Go modules
-      uses: actions/cache@v3
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-    - name: Make run_tests.sh executable
-      run: chmod +x testdata/run_tests.sh
+      - name: Make run_tests.sh executable
+        run: chmod +x testdata/run_tests.sh
 
-    - name: Run Blade file transformation tests
-      run: |
-        echo "🎯 Running comprehensive Blade file transformation tests"
-        cd testdata
-        ./run_tests.sh
+      - name: Run Blade file transformation tests
+        run: |
+          echo "🎯 Running comprehensive Blade file transformation tests"
+          cd testdata
+          ./run_tests.sh
 
-    - name: Run integration tests
-      run: |
-        echo "🔄 Running integration tests"
-        go test -v -run TestDirectoryProcessingIntegration ./...
+      - name: Run integration tests
+        run: |
+          echo "🔄 Running integration tests"
+          go test -v -run TestDirectoryProcessingIntegration ./...
 
   # ビルド検証 - クロスプラットフォーム
   build:
@@ -153,39 +151,39 @@ jobs:
             goarch: arm64
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
 
-    - name: Cache Go modules
-      uses: actions/cache@v3
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-    - name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-      run: |
-        echo "🏗️ Building for ${{ matrix.goos }}/${{ matrix.goarch }}"
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          go build -o form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }}.exe .
-        else
-          go build -o form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }} .
-        fi
+      - name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          echo "🏗️ Building for ${{ matrix.goos }}/${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            go build -o form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }}.exe .
+          else
+            go build -o form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }} .
+          fi
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: form-facade-replacer-*
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: form-facade-replacer-*
 
   # テスト統計とサマリー
   test-summary:
@@ -195,19 +193,19 @@ jobs:
     if: always()
 
     steps:
-    - name: Display overall status
-      run: |
-        echo "🎉 CI/CD Pipeline Summary"
-        echo "========================"
-        echo "Lint: ${{ needs.lint.result }}"
-        echo "Unit Tests: ${{ needs.test.result }}"
-        echo "Integration Tests: ${{ needs.integration-tests.result }}"
-        echo "Build: ${{ needs.build.result }}"
-        echo ""
-        
-        if [[ "${{ needs.test.result }}" == "success" && "${{ needs.integration-tests.result }}" == "success" && "${{ needs.build.result }}" == "success" ]]; then
-          echo "✅ All checks passed! Ready for deployment."
-        else
-          echo "❌ Some checks failed. Please review the logs."
-          exit 1
-        fi
+      - name: Display overall status
+        run: |
+          echo "🎉 CI/CD Pipeline Summary"
+          echo "========================"
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Unit Tests: ${{ needs.test.result }}"
+          echo "Integration Tests: ${{ needs.integration-tests.result }}"
+          echo "Build: ${{ needs.build.result }}"
+          echo ""
+
+          if [[ "${{ needs.test.result }}" == "success" && "${{ needs.integration-tests.result }}" == "success" && "${{ needs.build.result }}" == "success" ]]; then
+            echo "✅ All checks passed! Ready for deployment."
+          else
+            echo "❌ Some checks failed. Please review the logs."
+            exit 1
+          fi

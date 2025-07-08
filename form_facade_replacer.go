@@ -13,6 +13,12 @@ import (
 	"sync"
 )
 
+// バージョン情報（リリース時にldフラグで設定される）
+var (
+	version   = "dev"
+	buildDate = "unknown"
+)
+
 // 正規表現キャッシュ
 type RegexCache struct {
 	mu    sync.RWMutex
@@ -72,6 +78,11 @@ func main() {
 		return
 	}
 
+	if arg == "--version" || arg == "-v" {
+		printVersion()
+		return
+	}
+
 	config.TargetPath = arg
 
 	info, err := os.Stat(config.TargetPath)
@@ -108,10 +119,19 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("オプション:")
 	fmt.Println(" -h, --help このヘルプメッセージを表示")
+	fmt.Println(" -v, --version バージョン情報を表示")
 	fmt.Println()
 	fmt.Println("例:")
 	fmt.Println(" go run form_facade_replacer.go resources/views/hoge")
 	fmt.Println(" go run form_facade_replacer.go resources/views/hoge/fuga.blade.php")
+}
+
+func printVersion() {
+	fmt.Printf("Form Facade Replacer %s\n", version)
+	fmt.Printf("Build Date: %s\n", buildDate)
+	fmt.Println()
+	fmt.Println("Laravel Form Facade を HTML に変換する高性能 Go ツール")
+	fmt.Println("https://github.com/ryohirano/form-facade-replacer")
 }
 
 func processBladeFiles(config *ReplacementConfig) error {
@@ -265,26 +285,26 @@ func IsArrayFieldName(fieldName string) bool {
 func ProcessFieldName(name string) string {
 	// まず全体から外側のクォートを除去
 	nameAttr := strings.Trim(name, `'"`)
-	
+
 	// PHP文字列連結パターンを検出して変換
 	if strings.Contains(nameAttr, " . ") {
 		// パターン1: 'prefix' . $variable . 'suffix' (標準パターン)
 		// 変数部分が単一引用符を含む場合に対応
 		concatPattern1 := `^'([^']*)'\s*\.\s*(.+?)\s*\.\s*'([^']*)'$`
 		re1 := regexCache.GetRegex(concatPattern1)
-		
+
 		if matches := re1.FindStringSubmatch(nameAttr); len(matches) == 4 {
 			prefix := matches[1]
 			variable := strings.TrimSpace(matches[2])
 			suffix := matches[3]
 			return fmt.Sprintf("%s{{ %s }}%s", prefix, variable, suffix)
 		}
-		
+
 		// パターン2: prefix[' . $variable . ']suffix (埋め込みパターン)
 		// 変数部分が単一引用符を含む場合に対応
 		concatPattern2 := `^([^']*\[)'\s*\.\s*(.+?)\s*\.\s*'(\][^']*)$`
 		re2 := regexCache.GetRegex(concatPattern2)
-		
+
 		if matches := re2.FindStringSubmatch(nameAttr); len(matches) == 4 {
 			prefix := matches[1]
 			variable := strings.TrimSpace(matches[2])
@@ -292,7 +312,7 @@ func ProcessFieldName(name string) string {
 			return fmt.Sprintf("%s{{ %s }}%s", prefix, variable, suffix)
 		}
 	}
-	
+
 	return nameAttr
 }
 
@@ -377,7 +397,16 @@ func replaceFormPatterns(filePath string) error {
 	text = replaceFormCheckbox(text)
 	text = replaceFormSubmit(text)
 	text = replaceFormFile(text)
+	text = replaceFormEmail(text)
+	text = replaceFormPassword(text)
+	text = replaceFormUrl(text)
+	text = replaceFormTel(text)
+	text = replaceFormSearch(text)
+	text = replaceFormDate(text)
 	text = replaceFormTime(text)
+	text = replaceFormDatetime(text)
+	text = replaceFormRange(text)
+	text = replaceFormColor(text)
 	text = replaceFormRadio(text)
 
 	return os.WriteFile(filePath, []byte(text), 0644)
@@ -409,13 +438,11 @@ func processFormOpen(content string) string {
 
 // extractFormAction アクション属性の抽出（route、url の優先順位処理）
 func extractFormAction(content string) string {
-	// まず配列形式のroute（パラメータ付き）をチェック: 'route' => ['user.store', ['id' => 1]]
-	// 新しいバランス型の抽出を使用して、ネストした配列アクセスも正しく処理
 	paramRouteStart := regexCache.GetRegex(`'route'\s*=>\s*\[\s*'([^']+)'\s*,\s*`)
 	if startMatch := paramRouteStart.FindStringSubmatchIndex(content); len(startMatch) > 3 {
 		routeName := content[startMatch[2]:startMatch[3]]
 		paramStart := startMatch[1] // カンマ以降の開始位置
-		
+
 		// パラメータ部分を抽出（バランスした括弧を考慮）
 		params := extractRouteParamsBalanced(content[paramStart:])
 		if params != "" {
@@ -423,13 +450,11 @@ func extractFormAction(content string) string {
 		}
 	}
 
-	// 次に配列形式のroute（パラメータなし）をチェック: 'route' => ['user.index']
 	arrayRouteRe := regexCache.GetRegex(`'route'\s*=>\s*\[\s*'([^']+)'\s*\]`)
 	if arrayMatches := arrayRouteRe.FindStringSubmatch(content); len(arrayMatches) > 1 {
 		return fmt.Sprintf("{{ route('%s') }}", arrayMatches[1])
 	}
 
-	// 最後に文字列形式のroute: 'route' => 'user.index'
 	simpleRouteRe := regexCache.GetRegex(`'route'\s*=>\s*'([^']+)'`)
 	if simpleMatches := simpleRouteRe.FindStringSubmatch(content); len(simpleMatches) > 1 {
 		return fmt.Sprintf("{{ route('%s') }}", simpleMatches[1])
@@ -446,7 +471,7 @@ func extractRouteParamsBalanced(content string) string {
 	var inQuotes bool
 	var quoteChar rune
 	var escapeNext bool
-	
+
 	for _, char := range content {
 		if escapeNext {
 			result.WriteRune(char)
@@ -481,10 +506,10 @@ func extractRouteParamsBalanced(content string) string {
 				}
 			}
 		}
-		
+
 		result.WriteRune(char)
 	}
-	
+
 	return ""
 }
 
@@ -674,7 +699,6 @@ func processFormTextarea(params []string) string {
 	if len(params) < 1 {
 		return ""
 	}
-	// PHP文字列連結を含むフィールド名を適切に処理
 	name := ProcessFieldName(params[0])
 	value := ""
 
@@ -800,7 +824,6 @@ func replaceFormText(text string) string {
 }
 
 func replaceFormFile(text string) string {
-	// より複雑なネストに対応したパターン
 	// {!! Form::file(...) !!} と {{ Form::file(...) }} の両方に対応
 	// (?s)フラグで改行を含む文字列のマッチを有効化
 	patterns := []string{
@@ -890,16 +913,12 @@ func extractParamsBalanced(paramsStr string) []string {
 func convertJavaScriptStringLiterals(jsCode string) string {
 	result := jsCode
 
-	// より柔軟なアプローチ: ダブルクォートで囲まれた部分を特定して変換
-	// エスケープされたクォートも含めて、正しく処理する
-
 	// パターン1: JSON-like文字列を先に処理 "{\"key\": \"value\"}"
 	jsonStringPattern := `"(\{(?:[^"\\]|\\.)*\})"`
 	jsonRe := regexCache.GetRegex(jsonStringPattern)
 	result = jsonRe.ReplaceAllString(result, "'$1'")
 
 	// パターン2: エスケープを含む文字列リテラル "Say \"Hello\""
-	// 完全なエスケープ対応パターン
 	escapedStringPattern := `"((?:[^"\\]|\\.)*)"`
 	escapedRe := regexCache.GetRegex(escapedStringPattern)
 	result = escapedRe.ReplaceAllString(result, "'$1'")
@@ -1094,6 +1113,35 @@ func processFormInput(inputType string, params []string) string {
 
 	formattedValue := FormatValueAttribute(value)
 	return fmt.Sprintf(`<input type="%s" name="%s" value="%s"%s>`, inputType, name, formattedValue, extraAttrs)
+}
+
+func processFormPassword(params []string) string {
+	if len(params) < 1 {
+		return ""
+	}
+
+	// PHP文字列連結を含むフィールド名を適切に処理
+	name := ProcessFieldName(params[0])
+
+	value := ""
+
+	// パスワード用の属性処理（required属性サポートを含む）
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"placeholder", "class", "id", "required"},
+		Patterns: map[string]string{
+			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
+			"class":       `'class'\s*=>\s*'([^']+)'`,
+			"id":          `'id'\s*=>\s*'([^']+)'`,
+			"required":    `'required'\s*=>\s*'([^']*)'`,
+		},
+	}
+
+	extraAttrs := ""
+	if len(params) > 1 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[1])
+	}
+
+	return fmt.Sprintf(`<input type="password" name="%s" value="%s"%s>`, name, value, extraAttrs)
 }
 
 func replaceFormInput(text string) string {
@@ -1294,7 +1342,6 @@ func processFormSubmit(params []string) string {
 		textParam = ""
 	}
 
-	// 属性処理の統一
 	attrProcessor := &AttributeProcessor{
 		Order: []string{"class", "id", "style", "onclick", "disabled"},
 		Patterns: map[string]string{
@@ -1364,6 +1411,147 @@ func extractParams(paramsStr string) []string {
 
 	return params
 }
+
+func replaceFormEmail(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::email\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::email\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("email", params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func replaceFormPassword(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::password\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::password\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormPassword(params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func replaceFormUrl(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::url\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::url\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("url", params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func replaceFormTel(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::tel\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::tel\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("tel", params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func replaceFormSearch(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::search\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::search\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("search", params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func replaceFormDate(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::date\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::date\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("date", params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
 func replaceFormTime(text string) string {
 	// 複雑なネストに対応したパターンに変更
 	// (?s)フラグで改行を含む文字列のマッチを有効化
@@ -1378,7 +1566,6 @@ func replaceFormTime(text string) string {
 			fullMatch := re.FindStringSubmatch(match)
 			if len(fullMatch) > 1 {
 				paramStr := fullMatch[1]
-				// バランスを考慮したパラメータ抽出に変更
 				params := extractParamsBalanced(paramStr)
 				return processFormInput("time", params)
 			}
@@ -1388,6 +1575,53 @@ func replaceFormTime(text string) string {
 	return text
 }
 
+func replaceFormDatetime(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::datetime\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::datetime\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("datetime-local", params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+func replaceFormRange(text string) string {
+	// 複雑なネストに対応したパターンに変更
+	// (?s)フラグで改行を含む文字列のマッチを有効化
+	patterns := []string{
+		`(?s)\{\!\!\s*Form::range\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::range\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				paramStr := fullMatch[1]
+				// バランスを考慮したパラメータ抽出に変更
+				params := extractParamsBalanced(paramStr)
+				return processFormInput("range", params)
+			}
+			return match
+		})
+	}
+	return text
+}
 
 func replaceFormColor(text string) string {
 	// 複雑なネストに対応したパターンに変更
@@ -1427,7 +1661,6 @@ func replaceFormRadio(text string) string {
 			fullMatch := re.FindStringSubmatch(match)
 			if len(fullMatch) > 1 {
 				paramStr := fullMatch[1]
-				// バランスを考慮したパラメータ抽出に変更
 				params := extractParamsBalanced(paramStr)
 				return processFormRadio(params)
 			}
