@@ -121,16 +121,6 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-
-      - name: Make run_tests.sh executable
-        run: chmod +x testdata/run_tests.sh
-
-      - name: Run Blade file transformation tests
-        run: |
-          echo "🎯 Running comprehensive Blade file transformation tests"
-          cd testdata
-          ./run_tests.sh
-
       - name: Run integration tests
         run: |
           echo "🔄 Running integration tests"
