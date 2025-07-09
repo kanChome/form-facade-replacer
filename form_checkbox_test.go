@@ -85,6 +85,26 @@ func TestFormCheckbox(t *testing.T) {
 			input:    "{{ Form::checkbox('colors[]', 'red', old('colors')) }} {{ Form::checkbox('colors[]', 'blue', old('colors')) }}",
 			expected: `<input type="checkbox" name="colors[]" value="{{ red }}" @if(in_array(red, (array)old('colors'))) checked @endif> <input type="checkbox" name="colors[]" value="{{ blue }}" @if(in_array(blue, (array)old('colors'))) checked @endif>`,
 		},
+		{
+			name:     "Checkbox with onClick attribute (user example)",
+			input:    `{!! Form::checkbox('ticket_usages[]', $key, $pushReservation['ticket_usage'] && in_array($key, $pushReservation['ticket_usage']), ['id' => 'send-target-usage' . $key, 'style' => 'transform: scale(1.2); margin-right: 8px;', 'onClick' => 'onClickCheckBtn("#usage-all-btn")']) !!}`,
+			expected: `<input type="checkbox" name="ticket_usages[]" value="{{ $key }}" @if(in_array($key, (array)$pushReservation['ticket_usage'] && in_array($key, $pushReservation['ticket_usage']))) checked @endif id="{{ 'send-target-usage' . $key }}" style="transform: scale(1.2); margin-right: 8px;" onClick="onClickCheckBtn('#usage-all-btn')">`,
+		},
+		{
+			name:     "Checkbox with string concatenation in id attribute",
+			input:    `{!! Form::checkbox('items[]', $item->id, false, ['id' => 'item-' . $item->id, 'class' => 'item-checkbox']) !!}`,
+			expected: `<input type="checkbox" name="items[]" value="{{ $item->id }}" @if(in_array($item->id, (array)false)) checked @endif id="{{ 'item-' . $item->id }}" class="item-checkbox">`,
+		},
+		{
+			name:     "Checkbox with onClick and onChange attributes",
+			input:    `{!! Form::checkbox('notifications[]', 'email', old('notifications'), ['onClick' => 'toggleNotification(this)', 'onChange' => 'updateSettings()', 'class' => 'notification-toggle']) !!}`,
+			expected: `<input type="checkbox" name="notifications[]" value="{{ email }}" @if(in_array(email, (array)old('notifications'))) checked @endif class="notification-toggle" onClick="toggleNotification(this)" onChange="updateSettings()">`,
+		},
+		{
+			name:     "Checkbox with data attributes and events",
+			input:    `{!! Form::checkbox('features[]', 'premium', $user->hasFeature('premium'), ['data-feature' => 'premium', 'data-price' => '9.99', 'onClick' => 'handleFeatureToggle(this)']) !!}`,
+			expected: `<input type="checkbox" name="features[]" value="{{ premium }}" @if(in_array(premium, (array)$user->hasFeature('premium'))) checked @endif data-feature="premium" data-price="9.99" onClick="handleFeatureToggle(this)">`,
+		},
 	}
 
 	for _, tt := range tests {

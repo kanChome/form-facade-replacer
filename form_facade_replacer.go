@@ -204,10 +204,8 @@ func (ap *AttributeProcessor) ProcessAttributes(attrs string) string {
 	var extraAttrs string
 	for _, attr := range ap.Order {
 		if pattern, exists := ap.Patterns[attr]; exists {
-			// 拡張パターンで文字列連結も含めてマッチ
-			// PHP文字列連結を含む複雑な値もキャプチャ
-			extendedPattern := strings.Replace(pattern, `'([^']+)'`, `'([^']*(?:\s*\.\s*[^,\]]*(?:\[[^\]]*\])?[^,\]]*)*)'`, -1)
-			if re := regexCache.GetRegex(extendedPattern); re.MatchString(attrs) {
+			// 基本パターンをまず試す
+			if re := regexCache.GetRegex(pattern); re.MatchString(attrs) {
 				matches := re.FindStringSubmatch(attrs)
 				var val string
 				if len(matches) > 2 && matches[2] != "" {
@@ -234,6 +232,12 @@ func (ap *AttributeProcessor) ProcessAttributes(attrs string) string {
 
 // processAttributeValue 属性値のPHP文字列連結を処理
 func processAttributeValue(value string) string {
+	// 元の値を保持（引用符を含む）
+	originalValue := value
+
+	// 外側の引用符を取り除く
+	value = strings.Trim(value, `'"`)
+
 	// PHP文字列連結パターンを検出して変換（ProcessFieldNameと同様のロジック）
 	if strings.Contains(value, " . ") {
 		// パターン1: 'prefix' . $variable . 'suffix'
@@ -244,7 +248,8 @@ func processAttributeValue(value string) string {
 			prefix := matches[1]
 			variable := strings.TrimSpace(matches[2])
 			suffix := matches[3]
-			return fmt.Sprintf("%s{{ %s }}%s", prefix, variable, suffix)
+			// 全体を{{ }}で囲む
+			return fmt.Sprintf("{{ '%s' . %s . '%s' }}", prefix, variable, suffix)
 		}
 
 		// パターン2: 'prefix' . $variable (suffix無し)
@@ -254,7 +259,8 @@ func processAttributeValue(value string) string {
 		if matches := re2.FindStringSubmatch(value); len(matches) == 3 {
 			prefix := matches[1]
 			variable := strings.TrimSpace(matches[2])
-			return fmt.Sprintf("%s{{ %s }}", prefix, variable)
+			// 全体を{{ }}で囲む
+			return fmt.Sprintf("{{ '%s' . %s }}", prefix, variable)
 		}
 
 		// パターン3: PHP変数のみ（$var['key']形式）
@@ -265,8 +271,12 @@ func processAttributeValue(value string) string {
 		if matches := re3.FindStringSubmatch(value); len(matches) == 3 {
 			prefix := matches[1]
 			variable := strings.TrimSpace(matches[2])
-			return fmt.Sprintf("%s{{ %s }}", prefix, variable)
+			// 全体を{{ }}で囲む
+			return fmt.Sprintf("{{ '%s' . %s }}", prefix, variable)
 		}
+
+		// 文字列連結が見つかった場合は、元の値を{{ }}で囲む
+		return fmt.Sprintf("{{ %s }}", originalValue)
 	}
 
 	return value
@@ -293,25 +303,25 @@ func extractDynamicAttributesBalanced(attrs string) []DynamicAttributePair {
 	var inQuotes bool
 	var quoteChar rune
 	var escapeNext bool
-	
+
 	i := 0
 	for i < len(attrs) {
 		char := rune(attrs[i])
-		
+
 		if escapeNext {
 			current.WriteRune(char)
 			escapeNext = false
 			i++
 			continue
 		}
-		
+
 		if char == '\\' && inQuotes {
 			current.WriteRune(char)
 			escapeNext = true
 			i++
 			continue
 		}
-		
+
 		if !inQuotes && (char == '"' || char == '\'') {
 			inQuotes = true
 			quoteChar = char
@@ -319,7 +329,7 @@ func extractDynamicAttributesBalanced(attrs string) []DynamicAttributePair {
 			inQuotes = false
 			quoteChar = 0
 		}
-		
+
 		if !inQuotes {
 			switch char {
 			case '(':
@@ -350,11 +360,11 @@ func extractDynamicAttributesBalanced(attrs string) []DynamicAttributePair {
 				}
 			}
 		}
-		
+
 		current.WriteRune(char)
 		i++
 	}
-	
+
 	// 最後の属性を処理
 	if current.Len() > 0 {
 		attributeStr := strings.TrimSpace(current.String())
@@ -365,7 +375,7 @@ func extractDynamicAttributesBalanced(attrs string) []DynamicAttributePair {
 			}
 		}
 	}
-	
+
 	return pairs
 }
 
@@ -384,11 +394,11 @@ func parseDynamicAttributePair(input string) DynamicAttributePair {
 		// 5. 複雑な条件式（||演算子含む）: $変数->method() || $変数->method() ? 'キー' : 'キー' => 値
 		`(^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?(?:\s*\|\|\s*\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?)*\s*\?\s*'[^']*'\s*:\s*'[^']*')\s*=>\s*(.+)`,
 	}
-	
+
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		matches := re.FindStringSubmatch(input)
-		
+
 		if len(matches) >= 3 {
 			key := strings.TrimSpace(matches[1])
 			value := strings.TrimSpace(matches[2])
@@ -398,7 +408,7 @@ func parseDynamicAttributePair(input string) DynamicAttributePair {
 			}
 		}
 	}
-	
+
 	return DynamicAttributePair{}
 }
 
@@ -410,33 +420,33 @@ func isDynamicAttribute(input string) bool {
 	// 3. ネストした三項演算子: $変数 ? (ネスト) : 'キー' => 値
 	// 4. 複雑な条件式（&&、||演算子含む）
 	patterns := []string{
-		`^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?\s*\?\s*`,                        // $変数 ?
-		`^\(.*?\)\s*\?\s*`,                                                            // (条件) ?
-		`^\$\w+(?:\[[^\]]*\])*\s*\?\s*\([^)]+\)\s*:\s*'[^']*'\s*=>`,                  // $変数 ? (ネスト) : 'キー' =>
-		`^\$\w+(?:\[[^\]]*\])*\s*\?\s*'[^']*'\s*:\s*'[^']*'\s*=>`,                    // $変数 ? 'キー' : 'キー' =>
-		`^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?(?:\s*&&\s*\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?)*\s*\?\s*'[^']*'\s*:\s*'[^']*'\s*=>`, // $変数 && $変数 ?
+		`^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?\s*\?\s*`, // $変数 ?
+		`^\(.*?\)\s*\?\s*`, // (条件) ?
+		`^\$\w+(?:\[[^\]]*\])*\s*\?\s*\([^)]+\)\s*:\s*'[^']*'\s*=>`, // $変数 ? (ネスト) : 'キー' =>
+		`^\$\w+(?:\[[^\]]*\])*\s*\?\s*'[^']*'\s*:\s*'[^']*'\s*=>`,   // $変数 ? 'キー' : 'キー' =>
+		`^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?(?:\s*&&\s*\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?)*\s*\?\s*'[^']*'\s*:\s*'[^']*'\s*=>`,   // $変数 && $変数 ?
 		`^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?(?:\s*\|\|\s*\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?)*\s*\?\s*'[^']*'\s*:\s*'[^']*'\s*=>`, // $変数 || $変数 ?
 	}
-	
+
 	for _, pattern := range patterns {
 		re := regexCache.GetRegex(pattern)
 		if re.MatchString(input) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 // processDynamicAttributes 動的属性を処理してHTML属性文字列を生成
 func processDynamicAttributes(attrs string) string {
 	var result strings.Builder
-	
+
 	pairs := detectDynamicAttributes(attrs)
 	for _, pair := range pairs {
 		// 値の特別処理
 		value := pair.Value
-		
+
 		// null、true、false などのリテラル値は {{ }} で囲まない
 		if value == "null" || value == "true" || value == "false" {
 			result.WriteString(fmt.Sprintf(` {{ %s }}="%s"`, pair.Key, value))
@@ -445,7 +455,7 @@ func processDynamicAttributes(attrs string) string {
 			result.WriteString(fmt.Sprintf(` {{ %s }}="{{ %s }}"`, pair.Key, value))
 		}
 	}
-	
+
 	return result.String()
 }
 
@@ -1131,8 +1141,8 @@ func convertEventHandlerQuotesInHTML(html string) string {
 		return match
 	})
 
-	// onclick属性の処理
-	onclickPattern := `(onclick=")([^"]*(?:"[^"]*)*)(")`
+	// onclick属性の処理（大文字小文字の区別なし）
+	onclickPattern := `(?i)(onclick=")([^"]*(?:"[^"]*)*)(")`
 	onclickRe := regexCache.GetRegex(onclickPattern)
 
 	result = onclickRe.ReplaceAllStringFunc(result, func(match string) string {
@@ -1466,27 +1476,42 @@ func processFormCheckbox(params []string) string {
 
 	// 属性処理の統一
 	attrProcessor := &AttributeProcessor{
-		Order: []string{"class", "id", "style", "disabled"},
+		Order: []string{"class", "id", "style", "disabled", "onClick", "onChange"},
 		Patterns: map[string]string{
-			"class":    `'class'\s*=>\s*'([^']+)'`,
-			"id":       `'id'\s*=>\s*'([^']+)'`,
-			"style":    `'style'\s*=>\s*'([^']+)'`,
-			"disabled": `'disabled'\s*=>\s*'([^']*)'`,
+			"class":    `'class'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
+			"id":       `'id'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
+			"style":    `'style'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
+			"disabled": `'disabled'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
+			"onClick":  `'onClick'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
+			"onChange": `'onChange'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
 		},
 	}
 
 	extraAttrs := ""
 	if len(params) > 3 {
 		extraAttrs = attrProcessor.ProcessAttributes(params[3])
+
+		// data-属性の追加処理
+		dataRe := regexCache.GetRegex(`'(data-[^']+)'\s*=>\s*'([^']+)'`)
+		for _, match := range dataRe.FindAllStringSubmatch(params[3], -1) {
+			extraAttrs += fmt.Sprintf(` %s="%s"`, match[1], match[2])
+		}
 	}
 
+	// HTML出力を生成
+	var result string
 	// 配列形式の名前かどうかで処理を分岐（Laravel の配列形式サポートのため）
 	if strings.HasSuffix(name, "[]") {
-		return fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(in_array(%s, (array)%s)) checked @endif%s>`,
+		result = fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(in_array(%s, (array)%s)) checked @endif%s>`,
 			name, value, value, checked, extraAttrs)
 	} else {
-		return fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(%s) checked @endif%s>`, name, value, checked, extraAttrs)
+		result = fmt.Sprintf(`<input type="checkbox" name="%s" value="{{ %s }}" @if(%s) checked @endif%s>`, name, value, checked, extraAttrs)
 	}
+
+	// onclick/onchange属性のダブルクォート変換を最終出力に適用
+	result = convertEventHandlerQuotesInHTML(result)
+
+	return result
 }
 
 func replaceFormSubmit(text string) string {
