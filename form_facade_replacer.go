@@ -272,6 +272,183 @@ func processAttributeValue(value string) string {
 	return value
 }
 
+// DynamicAttributePair 動的属性のキーと値のペア
+type DynamicAttributePair struct {
+	Key   string // 動的キー（例: $condition ? 'disabled' : ''）
+	Value string // 動的値（例: $condition ? 'disabled' : null）
+}
+
+// detectDynamicAttributes 文字列から動的属性を検出し、DynamicAttributePairの配列を返す
+func detectDynamicAttributes(attrs string) []DynamicAttributePair {
+	// より精密な動的属性パターン
+	// 括弧の中でバランスを取りながら、動的属性を検出
+	return extractDynamicAttributesBalanced(attrs)
+}
+
+// extractDynamicAttributesBalanced バランスした括弧を考慮して動的属性を抽出
+func extractDynamicAttributesBalanced(attrs string) []DynamicAttributePair {
+	var pairs []DynamicAttributePair
+	var current strings.Builder
+	var parenCount, bracketCount, braceCount int
+	var inQuotes bool
+	var quoteChar rune
+	var escapeNext bool
+	
+	i := 0
+	for i < len(attrs) {
+		char := rune(attrs[i])
+		
+		if escapeNext {
+			current.WriteRune(char)
+			escapeNext = false
+			i++
+			continue
+		}
+		
+		if char == '\\' && inQuotes {
+			current.WriteRune(char)
+			escapeNext = true
+			i++
+			continue
+		}
+		
+		if !inQuotes && (char == '"' || char == '\'') {
+			inQuotes = true
+			quoteChar = char
+		} else if inQuotes && char == quoteChar {
+			inQuotes = false
+			quoteChar = 0
+		}
+		
+		if !inQuotes {
+			switch char {
+			case '(':
+				parenCount++
+			case ')':
+				parenCount--
+			case '[':
+				bracketCount++
+			case ']':
+				bracketCount--
+			case '{':
+				braceCount++
+			case '}':
+				braceCount--
+			case ',':
+				if parenCount == 0 && bracketCount == 0 && braceCount == 0 {
+					// 区切り文字に到達
+					attributeStr := strings.TrimSpace(current.String())
+					if isDynamicAttribute(attributeStr) {
+						pair := parseDynamicAttributePair(attributeStr)
+						if pair.Key != "" && pair.Value != "" {
+							pairs = append(pairs, pair)
+						}
+					}
+					current.Reset()
+					i++
+					continue
+				}
+			}
+		}
+		
+		current.WriteRune(char)
+		i++
+	}
+	
+	// 最後の属性を処理
+	if current.Len() > 0 {
+		attributeStr := strings.TrimSpace(current.String())
+		if isDynamicAttribute(attributeStr) {
+			pair := parseDynamicAttributePair(attributeStr)
+			if pair.Key != "" && pair.Value != "" {
+				pairs = append(pairs, pair)
+			}
+		}
+	}
+	
+	return pairs
+}
+
+// parseDynamicAttributePair 動的属性のキーと値を抽出する関数
+func parseDynamicAttributePair(input string) DynamicAttributePair {
+	// より包括的な動的属性のキーと値を抽出する正規表現
+	patterns := []string{
+		// 1. 標準的なパターン: $変数 ? 'キー' : 'キー' => 値
+		`(^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?\s*\?\s*'[^']*'\s*:\s*'[^']*')\s*=>\s*(.+)`,
+		// 2. 複雑な条件: (条件) ? 'キー' : 'キー' => 値
+		`(^\(.*?\)\s*\?\s*'[^']*'\s*:\s*'[^']*')\s*=>\s*(.+)`,
+		// 3. ネストした三項演算子: $変数 ? (ネスト) : 'キー' => 値
+		`(^\$\w+(?:\[[^\]]*\])*\s*\?\s*\([^)]+\)\s*:\s*'[^']*')\s*=>\s*(.+)`,
+		// 4. 複雑な条件式（&&、||演算子含む）: $変数->method() && $変数->method() ? 'キー' : 'キー' => 値
+		`(^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?(?:\s*&&\s*\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?)*\s*\?\s*'[^']*'\s*:\s*'[^']*')\s*=>\s*(.+)`,
+		// 5. 複雑な条件式（||演算子含む）: $変数->method() || $変数->method() ? 'キー' : 'キー' => 値
+		`(^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?(?:\s*\|\|\s*\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?)*\s*\?\s*'[^']*'\s*:\s*'[^']*')\s*=>\s*(.+)`,
+	}
+	
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		matches := re.FindStringSubmatch(input)
+		
+		if len(matches) >= 3 {
+			key := strings.TrimSpace(matches[1])
+			value := strings.TrimSpace(matches[2])
+			return DynamicAttributePair{
+				Key:   key,
+				Value: value,
+			}
+		}
+	}
+	
+	return DynamicAttributePair{}
+}
+
+// isDynamicAttribute 動的属性パターンを検出する関数
+func isDynamicAttribute(input string) bool {
+	// より包括的な動的属性パターンを検出する正規表現
+	// 1. 単純な変数: $変数 ? 'キー' : 'キー' => 値
+	// 2. 複雑な条件: (条件) ? 'キー' : 'キー' => 値
+	// 3. ネストした三項演算子: $変数 ? (ネスト) : 'キー' => 値
+	// 4. 複雑な条件式（&&、||演算子含む）
+	patterns := []string{
+		`^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?\s*\?\s*`,                        // $変数 ?
+		`^\(.*?\)\s*\?\s*`,                                                            // (条件) ?
+		`^\$\w+(?:\[[^\]]*\])*\s*\?\s*\([^)]+\)\s*:\s*'[^']*'\s*=>`,                  // $変数 ? (ネスト) : 'キー' =>
+		`^\$\w+(?:\[[^\]]*\])*\s*\?\s*'[^']*'\s*:\s*'[^']*'\s*=>`,                    // $変数 ? 'キー' : 'キー' =>
+		`^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?(?:\s*&&\s*\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?)*\s*\?\s*'[^']*'\s*:\s*'[^']*'\s*=>`, // $変数 && $変数 ?
+		`^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?(?:\s*\|\|\s*\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?)*\s*\?\s*'[^']*'\s*:\s*'[^']*'\s*=>`, // $変数 || $変数 ?
+	}
+	
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		if re.MatchString(input) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// processDynamicAttributes 動的属性を処理してHTML属性文字列を生成
+func processDynamicAttributes(attrs string) string {
+	var result strings.Builder
+	
+	pairs := detectDynamicAttributes(attrs)
+	for _, pair := range pairs {
+		// 値の特別処理
+		value := pair.Value
+		
+		// null、true、false などのリテラル値は {{ }} で囲まない
+		if value == "null" || value == "true" || value == "false" {
+			result.WriteString(fmt.Sprintf(` {{ %s }}="%s"`, pair.Key, value))
+		} else {
+			// 変数や複雑な式は {{ }} で囲む
+			result.WriteString(fmt.Sprintf(` {{ %s }}="{{ %s }}"`, pair.Key, value))
+		}
+	}
+	
+	return result.String()
+}
+
 func DetectArrayHelper(value string) bool {
 	return regexCache.GetRegex(`(?i)^(old|session|request|input)\s*\(`).MatchString(strings.TrimSpace(value))
 }
@@ -660,6 +837,7 @@ func processFormButton(textParam, attrs string) string {
 		},
 	}
 
+	// 静的属性の処理
 	extraAttrs := attrProcessor.ProcessAttributes(attrs)
 
 	// data-属性の追加処理
@@ -667,6 +845,10 @@ func processFormButton(textParam, attrs string) string {
 	for _, match := range dataRe.FindAllStringSubmatch(attrs, -1) {
 		extraAttrs += fmt.Sprintf(` %s="%s"`, match[1], match[2])
 	}
+
+	// 動的属性の処理
+	dynamicAttrs := processDynamicAttributes(attrs)
+	extraAttrs += dynamicAttrs
 
 	return fmt.Sprintf(`<button%s>{!! %s !!}</button>`, extraAttrs, textParam)
 }

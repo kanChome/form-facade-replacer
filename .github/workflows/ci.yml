@@ -84,7 +84,7 @@ jobs:
       - name: Run unit tests
         run: |
           echo "🧪 Running unit tests with Go ${{ matrix.go-version }} on ${{ matrix.os }}"
-          go test -v -race -coverprofile=coverage.out ./...
+          go test -v -race -coverprofile=coverage.txt ./...
 
       - name: Display test summary
         run: |
@@ -95,7 +95,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
         uses: codecov/codecov-action@v3
         with:
-          file: ./coverage.out
+          file: ./coverage.txt
           flags: unittests
           name: codecov-${{ matrix.os }}-go${{ matrix.go-version }}
 
