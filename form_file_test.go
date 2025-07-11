@@ -78,27 +78,27 @@ func TestFormFile(t *testing.T) {
 		{
 			name:     "File field with onchange multiple string arguments",
 			input:    `{{ Form::file('docs', ['onchange' => 'processFile(this, "uploads", "documents")']) }}`,
-			expected: `<input type="file" name="docs" onchange="processFile(this, 'uploads', 'documents')">`,
+			expected: `<input type="file" name="docs" onchange="processFile(this, "uploads", "documents")">`,
 		},
 		{
 			name:     "File field with onchange mixed arguments",
 			input:    `{{ Form::file('img', ['onchange' => 'resizeImage(this, "thumb", 300, "jpg")']) }}`,
-			expected: `<input type="file" name="img" onchange="resizeImage(this, 'thumb', 300, 'jpg')">`,
+			expected: `<input type="file" name="img" onchange="resizeImage(this, "thumb", 300, "jpg")">`,
 		},
 		{
 			name:     "File field with onclick double quotes",
 			input:    `{{ Form::file('data', ['onclick' => 'showDialog(this, "Upload File", "Select a file to upload")']) }}`,
-			expected: `<input type="file" name="data" onclick="showDialog(this, 'Upload File', 'Select a file to upload')">`,
+			expected: `<input type="file" name="data" onclick="showDialog(this, "Upload File", "Select a file to upload")">`,
 		},
 		{
 			name:     "File field with onchange escaped quotes",
 			input:    `{{ Form::file('file', ['onchange' => 'alert(this, "Say \"Hello\"")']) }}`,
-			expected: `<input type="file" name="file" onchange="alert(this, 'Say \"Hello\"')">`,
+			expected: `<input type="file" name="file" onchange="alert(this, "Say \"Hello\"")">`,
 		},
 		{
 			name:     "File field with onchange nested quotes in JSON",
 			input:    `{{ Form::file('config', ['onchange' => 'parseJSON(this, "{\"key\": \"value\"}")']) }}`,
-			expected: `<input type="file" name="config" onchange="parseJSON(this, '{\"key\": \"value\"}')">`,
+			expected: `<input type="file" name="config" onchange="parseJSON(this, "{\"key\": \"value\"}")">`,
 		},
 	}
 

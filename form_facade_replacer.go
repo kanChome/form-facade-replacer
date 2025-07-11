@@ -1101,7 +1101,8 @@ func extractParamsBalanced(paramsStr string) []string {
 // convertJavaScriptStringLiterals JavaScript文字列リテラル内のダブルクォートをシングルクォートに変換
 func convertJavaScriptStringLiterals(jsCode string) string {
 	result := jsCode
-	re := regexCache.GetRegex(`"([^"]*)"`)
+
+	re := regexCache.GetRegex(`"([^"\\]+)"`)
 
 	for re.MatchString(result) {
 		result = re.ReplaceAllString(result, "'$1'")
@@ -1114,29 +1115,32 @@ func convertJavaScriptStringLiterals(jsCode string) string {
 func convertEventHandlerQuotesInHTML(html string) string {
 	result := html
 
-	onchangePattern := `(?i)onchange="([^"]*(?:"[^"]*")*[^"]*)"`
-	onchangeRe := regexCache.GetRegex(onchangePattern)
-
-	result = onchangeRe.ReplaceAllStringFunc(result, func(match string) string {
-		matches := onchangeRe.FindStringSubmatch(match)
-		if len(matches) >= 2 {
-			jsCode := matches[1]
-			convertedJS := convertJavaScriptStringLiterals(jsCode)
-			return `onchange="` + convertedJS + `"`
-		}
-		return match
-	})
-
-	// onclick属性の処理（大文字小文字の区別なし）
-	onclickPattern := `(?i)onclick="([^"]*(?:"[^"]*")*[^"]*)"`
+	onclickPattern := `(?i)(onclick=")([^"]*(?:"[^"]*")*?[^"]*?)("(?:\s|>))`
 	onclickRe := regexCache.GetRegex(onclickPattern)
 
 	result = onclickRe.ReplaceAllStringFunc(result, func(match string) string {
 		matches := onclickRe.FindStringSubmatch(match)
-		if len(matches) >= 2 {
-			jsCode := matches[1]
+		if len(matches) >= 4 {
+			prefix := matches[1] // 元の大文字小文字を保持
+			jsCode := matches[2]
+			suffix := matches[3]
 			convertedJS := convertJavaScriptStringLiterals(jsCode)
-			return `onClick="` + convertedJS + `"`
+			return prefix + convertedJS + suffix
+		}
+		return match
+	})
+
+	onchangePattern := `(?i)(onchange=")([^"]*(?:"[^"]*")*?[^"]*?)("(?:\s|>))`
+	onchangeRe := regexCache.GetRegex(onchangePattern)
+
+	result = onchangeRe.ReplaceAllStringFunc(result, func(match string) string {
+		matches := onchangeRe.FindStringSubmatch(match)
+		if len(matches) >= 4 {
+			prefix := matches[1] // 元の大文字小文字を保持
+			jsCode := matches[2]
+			suffix := matches[3]
+			convertedJS := convertJavaScriptStringLiterals(jsCode)
+			return prefix + convertedJS + suffix
 		}
 		return match
 	})
