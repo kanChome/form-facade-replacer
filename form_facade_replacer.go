@@ -290,8 +290,6 @@ type DynamicAttributePair struct {
 
 // detectDynamicAttributes 文字列から動的属性を検出し、DynamicAttributePairの配列を返す
 func detectDynamicAttributes(attrs string) []DynamicAttributePair {
-	// より精密な動的属性パターン
-	// 括弧の中でバランスを取りながら、動的属性を検出
 	return extractDynamicAttributesBalanced(attrs)
 }
 
@@ -381,7 +379,6 @@ func extractDynamicAttributesBalanced(attrs string) []DynamicAttributePair {
 
 // parseDynamicAttributePair 動的属性のキーと値を抽出する関数
 func parseDynamicAttributePair(input string) DynamicAttributePair {
-	// より包括的な動的属性のキーと値を抽出する正規表現
 	patterns := []string{
 		// 1. 標準的なパターン: $変数 ? 'キー' : 'キー' => 値
 		`(^\$\w+(?:\[[^\]]*\])*(?:->[a-zA-Z_]\w*\([^)]*\))?\s*\?\s*'[^']*'\s*:\s*'[^']*')\s*=>\s*(.+)`,
@@ -1104,16 +1101,11 @@ func extractParamsBalanced(paramsStr string) []string {
 // convertJavaScriptStringLiterals JavaScript文字列リテラル内のダブルクォートをシングルクォートに変換
 func convertJavaScriptStringLiterals(jsCode string) string {
 	result := jsCode
+	re := regexCache.GetRegex(`"([^"]*)"`)
 
-	// パターン1: JSON-like文字列を先に処理 "{\"key\": \"value\"}"
-	jsonStringPattern := `"(\{(?:[^"\\]|\\.)*\})"`
-	jsonRe := regexCache.GetRegex(jsonStringPattern)
-	result = jsonRe.ReplaceAllString(result, "'$1'")
-
-	// パターン2: エスケープを含む文字列リテラル "Say \"Hello\""
-	escapedStringPattern := `"((?:[^"\\]|\\.)*)"`
-	escapedRe := regexCache.GetRegex(escapedStringPattern)
-	result = escapedRe.ReplaceAllString(result, "'$1'")
+	for re.MatchString(result) {
+		result = re.ReplaceAllString(result, "'$1'")
+	}
 
 	return result
 }
@@ -1122,39 +1114,29 @@ func convertJavaScriptStringLiterals(jsCode string) string {
 func convertEventHandlerQuotesInHTML(html string) string {
 	result := html
 
-	// onchange属性の処理
-	// パターン: onchange="JavaScript code with "quotes""
-	onchangePattern := `(onchange=")([^"]*(?:"[^"]*)*)(")`
+	onchangePattern := `(?i)onchange="([^"]*(?:"[^"]*")*[^"]*)"`
 	onchangeRe := regexCache.GetRegex(onchangePattern)
 
 	result = onchangeRe.ReplaceAllStringFunc(result, func(match string) string {
 		matches := onchangeRe.FindStringSubmatch(match)
-		if len(matches) >= 4 {
-			prefix := matches[1] // onchange="
-			jsCode := matches[2] // JavaScript コード部分（内部にダブルクォートを含む可能性）
-			suffix := matches[3] // 最後の "
-
-			// JavaScript内の文字列リテラルを変換
+		if len(matches) >= 2 {
+			jsCode := matches[1]
 			convertedJS := convertJavaScriptStringLiterals(jsCode)
-			return prefix + convertedJS + suffix
+			return `onchange="` + convertedJS + `"`
 		}
 		return match
 	})
 
 	// onclick属性の処理（大文字小文字の区別なし）
-	onclickPattern := `(?i)(onclick=")([^"]*(?:"[^"]*)*)(")`
+	onclickPattern := `(?i)onclick="([^"]*(?:"[^"]*")*[^"]*)"`
 	onclickRe := regexCache.GetRegex(onclickPattern)
 
 	result = onclickRe.ReplaceAllStringFunc(result, func(match string) string {
 		matches := onclickRe.FindStringSubmatch(match)
-		if len(matches) >= 4 {
-			prefix := matches[1] // onclick="
-			jsCode := matches[2] // JavaScript コード部分
-			suffix := matches[3] // 最後の "
-
-			// JavaScript内の文字列リテラルを変換
+		if len(matches) >= 2 {
+			jsCode := matches[1]
 			convertedJS := convertJavaScriptStringLiterals(jsCode)
-			return prefix + convertedJS + suffix
+			return `onClick="` + convertedJS + `"`
 		}
 		return match
 	})
@@ -1482,20 +1464,21 @@ func processFormCheckbox(params []string) string {
 			"id":       `'id'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
 			"style":    `'style'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
 			"disabled": `'disabled'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
-			"onClick":  `'onClick'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
-			"onChange": `'onChange'\s*=>\s*(.+?)(?:\s*,|\s*\]|$)`,
+			"onClick":  `'onClick'\s*=>\s*'([^']+)'`,
+			"onChange": `'onChange'\s*=>\s*'([^']+)'`,
 		},
 	}
 
 	extraAttrs := ""
 	if len(params) > 3 {
-		extraAttrs = attrProcessor.ProcessAttributes(params[3])
-
-		// data-属性の追加処理
+		// data-属性の追加処理（最初に処理）
 		dataRe := regexCache.GetRegex(`'(data-[^']+)'\s*=>\s*'([^']+)'`)
 		for _, match := range dataRe.FindAllStringSubmatch(params[3], -1) {
 			extraAttrs += fmt.Sprintf(` %s="%s"`, match[1], match[2])
 		}
+
+		// その他の属性の処理
+		extraAttrs += attrProcessor.ProcessAttributes(params[3])
 	}
 
 	// HTML出力を生成

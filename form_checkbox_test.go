@@ -93,7 +93,7 @@ func TestFormCheckbox(t *testing.T) {
 		{
 			name:     "Checkbox with string concatenation in id attribute",
 			input:    `{!! Form::checkbox('items[]', $item->id, false, ['id' => 'item-' . $item->id, 'class' => 'item-checkbox']) !!}`,
-			expected: `<input type="checkbox" name="items[]" value="{{ $item->id }}" @if(in_array($item->id, (array)false)) checked @endif id="{{ 'item-' . $item->id }}" class="item-checkbox">`,
+			expected: `<input type="checkbox" name="items[]" value="{{ $item->id }}" @if(in_array($item->id, (array)false)) checked @endif class="item-checkbox" id="{{ 'item-' . $item->id }}">`,
 		},
 		{
 			name:     "Checkbox with onClick and onChange attributes",
