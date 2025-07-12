@@ -1,82 +1,89 @@
 # Laravel Form Facade Replacer
 
-Laravel Form Facade を純粋なHTMLタグに変換するGoツールです。Laravel依存を削除し、標準的なBladeテンプレートとHTMLを使用できるようにします。
+A Go tool that converts Laravel Form Facade syntax to pure HTML tags, enabling framework-independent Blade templates with standard HTML forms.
 
-## 概要
+## 🌐 Language / 言語
+- **English** (Current) - You are here
+- [日本語 (Japanese)](README.ja.md) - 日本語版はこちら
 
-このツールは、LaravelのForm Facadeを使用したBladeテンプレートファイル（.blade.php）を解析し、対応するHTMLフォーム要素に自動変換します。変換により、Laravelフレームワークに依存しない、純粋なHTML + Blade構文のテンプレートファイルを生成できます。
+## Overview
 
-## 特徴
+This tool analyzes Blade template files (.blade.php) that use Laravel's Form Facade and automatically converts them to corresponding HTML form elements. The conversion eliminates Laravel framework dependencies while generating pure HTML + Blade syntax template files.
 
-- **完全なForm Facade対応**: 23種類のForm Facadeメソッドをサポート
-- **動的属性処理**: 条件付きdisabled属性や複雑な三項演算子をサポート
-- **文字列連結処理**: PHP文字列連結を適切なBlade構文に自動変換
-- **HTML5準拠**: 生成されるHTMLはHTML5標準に準拠
-- **AttributeProcessorシステム**: 属性の統一された処理と出力順序の一貫性を保証
-- **イベントハンドラー対応**: onClick、onChange等のJavaScript属性を適切に処理（JavaScript文字列リテラル変換機能付き）
-- **Blade構文保持**: Laravel独自のBlade構文（@if、@foreach等）を適切に保持
-- **CSRF保護**: POST/PUT/PATCH/DELETEリクエストには自動でCSRF保護を追加
-- **高性能**: 正規表現キャッシュシステムによる高速処理
-- **包括的テストカバレッジ**: 3,557行の徹底したテストスイート
+## Features
 
-## インストール
+- **Complete Form Facade Support**: Supports 24 types of Form Facade methods
+- **Dynamic Attribute Processing**: Handles conditional disabled attributes and complex ternary operators
+- **String Concatenation Processing**: Automatically converts PHP string concatenation to appropriate Blade syntax
+- **HTML5 Compliance**: Generated HTML adheres to HTML5 standards
+- **AttributeProcessor System**: Ensures unified attribute processing and consistent output ordering
+- **Event Handler Support**: Properly processes JavaScript attributes like onClick and onChange (with JavaScript string literal conversion)
+- **Blade Syntax Preservation**: Maintains Laravel-specific Blade syntax (@if, @foreach, etc.)
+- **CSRF Protection**: Automatically adds CSRF protection for POST/PUT/PATCH/DELETE requests
+- **High Performance**: Fast processing through regex caching system
+- **Comprehensive Test Coverage**: Thorough test suite with 3,557 lines of code
 
-### 要件
-- Go 1.21以上
+## Installation
 
-### インストール手順
+### Requirements
+- Go 1.21 or higher
+
+### Installation Steps
 
 ```bash
-# リポジトリをクローン
+# Clone the repository
 git clone https://github.com/ryohirano/form-facade-replacer.git
 cd form-facade-replacer
 
-# Go modules初期化（必要に応じて）
+# Initialize Go modules (if needed)
 go mod tidy
 
-# 開発ビルド
+# Development build
 go build -o form_facade_replacer form_facade_replacer.go
 
-# リリースビルド（バージョン情報付き）
-go build -ldflags "-X main.version=v2.0.0 -X main.buildDate=$(date +'%Y-%m-%d')" -o form_facade_replacer form_facade_replacer.go
+# Release build (with version information)
+go build -ldflags "-X main.version=v2.1.0 -X main.buildDate=$(date +'%Y-%m-%d')" -o form_facade_replacer form_facade_replacer.go
 ```
 
-## 使用方法
+## Usage
 
-### 基本的な使用法
+### Basic Usage
 
 ```bash
-# 単一ファイルを処理
+# Process a single file
 go run form_facade_replacer.go path/to/file.blade.php
 
-# ディレクトリを再帰的に処理
+# Process a directory recursively
 go run form_facade_replacer.go path/to/views/directory
 
-# ヘルプを表示
+# Display help
 go run form_facade_replacer.go --help
+
+# Show version information
+go run form_facade_replacer.go --version
 ```
 
-### 実行例
+### Usage Examples
 
 ```bash
-# Laravelのviews配下すべてを処理
+# Process all files in Laravel's views directory
 go run form_facade_replacer.go resources/views
 
-# 特定のファイルのみ処理
+# Process a specific file only
 go run form_facade_replacer.go resources/views/user/create.blade.php
 ```
 
-## 対応機能
+## Supported Features
 
 ### Form::open / Form::close
 
-**変換前:**
+**Before:**
 ```php
 {!! Form::open(['route' => 'user.store', 'method' => 'POST', 'class' => 'user-form']) !!}
 {!! Form::close() !!}
 ```
 
-**変換後:**
+**After:**
 ```html
 <form action="{{ route('user.store') }}" method="POST" class="user-form">
 {{ csrf_field() }}
@@ -85,38 +92,38 @@ go run form_facade_replacer.go resources/views/user/create.blade.php
 
 ### Form::text / Form::number
 
-**変換前:**
+**Before:**
 ```php
-{{ Form::text('name', $user->name, ['class' => 'form-control', 'placeholder' => 'お名前']) }}
+{{ Form::text('name', $user->name, ['class' => 'form-control', 'placeholder' => 'Your Name']) }}
 {{ Form::number('age', null, ['min' => 0, 'max' => 120]) }}
 ```
 
-**変換後:**
+**After:**
 ```html
-<input type="text" name="name" value="{{ $user->name }}" placeholder="お名前" class="form-control">
+<input type="text" name="name" value="{{ $user->name }}" placeholder="Your Name" class="form-control">
 <input type="number" name="age" min="0" max="120">
 ```
 
 ### Form::textarea
 
-**変換前:**
+**Before:**
 ```php
-{{ Form::textarea('message', 'デフォルトメッセージ', ['rows' => 5, 'class' => 'form-control']) }}
+{{ Form::textarea('message', 'Default Message', ['rows' => 5, 'class' => 'form-control']) }}
 ```
 
-**変換後:**
+**After:**
 ```html
-<textarea name="message" rows="5" class="form-control">{{ 'デフォルトメッセージ' }}</textarea>
+<textarea name="message" rows="5" class="form-control">{{ 'Default Message' }}</textarea>
 ```
 
 ### Form::select
 
-**変換前:**
+**Before:**
 ```php
 {{ Form::select('category', $categories, $selected, ['class' => 'form-select']) }}
 ```
 
-**変換後:**
+**After:**
 ```html
 <select name="category" class="form-select">
 @foreach($categories as $key => $value)
@@ -127,72 +134,72 @@ go run form_facade_replacer.go resources/views/user/create.blade.php
 
 ### Form::checkbox
 
-**変換前:**
+**Before:**
 ```php
 {{ Form::checkbox('newsletter', 'yes', true, ['class' => 'form-check-input']) }}
 ```
 
-**変換後:**
+**After:**
 ```html
 <input type="checkbox" name="newsletter" value="{{ 'yes' }}" @if(true) checked @endif class="form-check-input">
 ```
 
 ### Form::button / Form::submit
 
-**変換前:**
+**Before:**
 ```php
-{{ Form::button('クリック') }}
-{{ Form::submit('送信', ['class' => 'btn btn-primary']) }}
+{{ Form::button('Click Me') }}
+{{ Form::submit('Submit', ['class' => 'btn btn-primary']) }}
 ```
 
-**変換後:**
+**After:**
 ```html
-<button type="button">{!! 'クリック' !!}</button>
-<button type="submit" class="btn btn-primary">送信</button>
+<button type="button">{!! 'Click Me' !!}</button>
+<button type="submit" class="btn btn-primary">Submit</button>
 ```
 
 ### Form::label
 
-**変換前:**
+**Before:**
 ```php
-{{ Form::label('name', 'お名前', ['class' => 'form-label']) }}
+{{ Form::label('name', 'Your Name', ['class' => 'form-label']) }}
 ```
 
-**変換後:**
+**After:**
 ```html
-<label for="name" class="form-label">{!! 'お名前' !!}</label>
+<label for="name" class="form-label">{!! 'Your Name' !!}</label>
 ```
 
 ### Form::hidden
 
-**変換前:**
+**Before:**
 ```php
 {!! Form::hidden('user_id', $user->id) !!}
 ```
 
-**変換後:**
+**After:**
 ```html
 <input type="hidden" name="user_id" value="{{ $user->id }}">
 ```
 
-### 動的属性処理（条件付き属性）
+### Dynamic Attribute Processing (Conditional Attributes)
 
-**変換前:**
+**Before:**
 ```php
-{!! Form::button('使用する', [
+{!! Form::button('Use This', [
     'class' => 'btn btn-info', 
     $status ? 'disabled' : '' => $status ? 'disabled' : null
 ]) !!}
 ```
 
-**変換後:**
+**After:**
 ```html
-<button class="btn btn-info" {{ $status ? 'disabled' : '' }}="{{ $status ? 'disabled' : null }}">{!! '使用する' !!}</button>
+<button class="btn btn-info" {{ $status ? 'disabled' : '' }}="{{ $status ? 'disabled' : null }}">{!! 'Use This' !!}</button>
 ```
 
-### 文字列連結処理
+### String Concatenation Processing
 
-**変換前:**
+**Before:**
 ```php
 {!! Form::checkbox('items[]', $item->id, false, [
     'id' => 'item-' . $item->id,
@@ -200,14 +207,14 @@ go run form_facade_replacer.go resources/views/user/create.blade.php
 ]) !!}
 ```
 
-**変換後:**
+**After:**
 ```html
 <input type="checkbox" name="items[]" value="{{ $item->id }}" @if(in_array($item->id, (array)false)) checked @endif id="{{ 'item-' . $item->id }}" class="item-checkbox">
 ```
 
-### イベントハンドラー処理
+### Event Handler Processing
 
-**変換前:**
+**Before:**
 ```php
 {!! Form::checkbox('notifications[]', 'email', old('notifications'), [
     'onClick' => 'toggleNotification(this)',
@@ -216,239 +223,240 @@ go run form_facade_replacer.go resources/views/user/create.blade.php
 ]) !!}
 ```
 
-**変換後:**
+**After:**
 ```html
 <input type="checkbox" name="notifications[]" value="{{ 'email' }}" @if(in_array('email', (array)old('notifications'))) checked @endif class="notification-toggle" onClick="toggleNotification(this)" onChange="updateSettings()">
 ```
 
-### JavaScript文字列リテラル変換
+### JavaScript String Literal Conversion
 
-**変換前:**
+**Before:**
 ```php
 {!! Form::file('image', ['onchange' => 'previewImage(this, "uploads", "preview")']) !!}
 ```
 
-**変換後:**
+**After:**
 ```html
 <input type="file" name="image" onchange="previewImage(this, 'uploads', "preview")">
 ```
 
-この機能により、JavaScript内の文字列リテラルが部分的にシングルクォートに変換され、HTMLとJavaScriptの適切な分離が実現されます。
+This feature enables partial conversion of JavaScript string literals to single quotes, achieving proper separation between HTML and JavaScript.
 
-## サポートされるForm Facadeメソッド（23種類）
+## Supported Form Facade Methods (24 Types)
 
-### 基本フォーム要素
-1. **Form::open** - フォーム開始タグ（CSRF保護自動追加）
-2. **Form::close** - フォーム終了タグ
-3. **Form::text** - テキスト入力フィールド
-4. **Form::textarea** - テキストエリア
-5. **Form::hidden** - 隠し入力フィールド
-6. **Form::label** - ラベル要素
+### Basic Form Elements
+1. **Form::open** - Form opening tag (with automatic CSRF protection)
+2. **Form::close** - Form closing tag
+3. **Form::text** - Text input field
+4. **Form::textarea** - Textarea element
+5. **Form::hidden** - Hidden input field
+6. **Form::label** - Label element
 
-### 選択・チェック要素
-7. **Form::checkbox** - チェックボックス（配列対応、動的属性対応）
-8. **Form::radio** - ラジオボタン
-9. **Form::select** - セレクトボックス（foreachループ生成）
+### Selection & Check Elements
+7. **Form::checkbox** - Checkbox (supports arrays, dynamic attributes)
+8. **Form::radio** - Radio button
+9. **Form::select** - Select box (generates foreach loops)
 
-### ボタン要素
-10. **Form::button** - 汎用ボタン（動的属性対応）
-11. **Form::submit** - 送信ボタン
+### Button Elements
+10. **Form::button** - General button (supports dynamic attributes)
+11. **Form::submit** - Submit button
 
-### 入力タイプ別要素
-12. **Form::number** - 数値入力フィールド
-13. **Form::email** - メール入力フィールド
-14. **Form::password** - パスワード入力フィールド
-15. **Form::url** - URL入力フィールド
-16. **Form::tel** - 電話番号入力フィールド
-17. **Form::search** - 検索入力フィールド
-18. **Form::file** - ファイル入力フィールド
+### Input Type-Specific Elements
+12. **Form::number** - Number input field
+13. **Form::email** - Email input field
+14. **Form::password** - Password input field
+15. **Form::url** - URL input field
+16. **Form::tel** - Telephone input field
+17. **Form::search** - Search input field
+18. **Form::file** - File input field
 
-### 日時・色・範囲要素
-19. **Form::date** - 日付入力フィールド
-20. **Form::time** - 時間入力フィールド
-21. **Form::datetime** - 日時入力フィールド
-22. **Form::range** - 範囲入力フィールド
-23. **Form::color** - 色選択フィールド
+### Date, Color & Range Elements
+19. **Form::date** - Date input field
+20. **Form::time** - Time input field
+21. **Form::datetime** - DateTime input field
+22. **Form::range** - Range input field
+23. **Form::color** - Color picker field
+24. **Form::input** - Generic input handler
 
-## 対応パラメータパターン
+## Supported Parameter Patterns
 
 ### Form::open
-- `['route' => 'route.name']` - ルート指定
-- `['url' => '/path']` - URL直接指定
-- `['method' => 'POST/GET/PUT/PATCH/DELETE']` - HTTPメソッド
-- `['class' => 'css-class', 'id' => 'element-id']` - HTML属性
+- `['route' => 'route.name']` - Route specification
+- `['url' => '/path']` - Direct URL specification
+- `['method' => 'POST/GET/PUT/PATCH/DELETE']` - HTTP method
+- `['class' => 'css-class', 'id' => 'element-id']` - HTML attributes
 
-### 入力要素共通
-- `(name)` - 名前のみ
-- `(name, value)` - 名前と値
-- `(name, value, [attributes])` - 名前、値、属性
+### Common Input Elements
+- `(name)` - Name only
+- `(name, value)` - Name and value
+- `(name, value, [attributes])` - Name, value, and attributes
 
-### チェックボックス・ラジオボタン
-- `(name, value, checked, [attributes])` - 名前、値、チェック状態、属性
-- **配列名サポート**: `name[]` 形式で配列フィールドに対応
-- **動的チェック状態**: `old()`, `session()`, `$user->settings` 等
+### Checkbox & Radio Button
+- `(name, value, checked, [attributes])` - Name, value, checked state, attributes
+- **Array Support**: Supports array fields with `name[]` format
+- **Dynamic Check State**: Supports `old()`, `session()`, `$user->settings`, etc.
 
-### 高度な属性パターン
-- **動的属性**: `$condition ? 'disabled' : '' => $condition ? 'disabled' : null`
-- **文字列連結**: `'id' => 'prefix-' . $variable . '-suffix'`
-- **イベントハンドラー**: `'onClick' => 'function()', 'onChange' => 'update()'`
+### Advanced Attribute Patterns
+- **Dynamic Attributes**: `$condition ? 'disabled' : '' => $condition ? 'disabled' : null`
+- **String Concatenation**: `'id' => 'prefix-' . $variable . '-suffix'`
+- **Event Handlers**: `'onClick' => 'function()', 'onChange' => 'update()'`
 
-## 技術的特徴
+## Technical Features
 
-### AttributeProcessorシステム
-統一された属性処理システムにより、すべてのForm要素で一貫した属性の処理と出力順序を保証します。
-- **固定順序**: 属性の出力順序を配列で管理し、常に同じ順序で出力
-- **動的属性サポート**: 三項演算子や複雑な条件式を含む動的属性の処理
-- **文字列連結処理**: PHP文字列連結を適切なBlade構文に自動変換
+### AttributeProcessor System
+A unified attribute processing system that ensures consistent attribute handling and output ordering for all Form elements.
+- **Fixed Ordering**: Manages attribute output order through arrays, ensuring consistent output
+- **Dynamic Attribute Support**: Handles dynamic attributes with ternary operators and complex conditional expressions
+- **String Concatenation Processing**: Automatically converts PHP string concatenation to appropriate Blade syntax
 
-### 正規表現キャッシュシステム
-高性能な処理のため、使用する正規表現をキャッシュするRegexCacheシステムを実装。
-- **並行安全**: `sync.RWMutex`によるスレッドセーフな実装
-- **メモリ効率**: 一度コンパイルした正規表現の再利用
-- **高速処理**: 大量のファイル処理時のパフォーマンス向上
+### Regex Caching System
+Implements a RegexCache system for high-performance processing by caching frequently used regular expressions.
+- **Concurrent Safety**: Thread-safe implementation using `sync.RWMutex`
+- **Memory Efficiency**: Reuses compiled regular expressions
+- **High Performance**: Improves performance when processing large numbers of files
 
-### HTML5準拠とアクセシビリティ
-- **ブール属性**: `disabled`、`required`等は値なしのブール属性として出力
-- **無効値処理**: null、空文字列の場合、不要な属性を自動省略
-- **W3C標準**: HTML5仕様に完全準拠した要素とアクセシビリティ属性の生成
-- **フォームバリデーション**: 適切なinput type属性による自動バリデーション
+### HTML5 Compliance and Accessibility
+- **Boolean Attributes**: Outputs boolean attributes like `disabled`, `required` without values
+- **Invalid Value Handling**: Automatically omits unnecessary attributes for null or empty values
+- **W3C Standards**: Generates elements and accessibility attributes in full compliance with HTML5 specifications
+- **Form Validation**: Enables automatic validation through appropriate input type attributes
 
-### 複雑な構文サポート
-- **ネストした配列**: 多層配列パラメータの適切な処理
-- **PHP関数呼び出し**: `old()`, `session()`, `route()`等の関数の保持
-- **論理演算子**: `&&`, `||`を含む複雑な条件式の処理
-- **メソッドチェーン**: `$user->settings->get('key')`等のメソッドチェーンサポート
+### Complex Syntax Support
+- **Nested Arrays**: Proper handling of multi-dimensional array parameters
+- **PHP Function Calls**: Preserves functions like `old()`, `session()`, `route()`
+- **Logical Operators**: Handles complex conditional expressions with `&&`, `||`
+- **Method Chaining**: Supports method chaining like `$user->settings->get('key')`
 
-### JavaScript文字列リテラル処理
-- **適応的変換**: JavaScript属性内の文字列リテラルを適切に変換
-- **部分変換機能**: 最初の文字列リテラルのみをシングルクォートに変換し、複雑なJavaScriptコードの安全性を保持
-- **イベントハンドラー最適化**: onClick、onChange等のイベントハンドラー属性で自動適用
-- **非貪欲マッチング**: 正規表現による精密な属性境界検出で、複数属性の正確な処理を実現
+### JavaScript String Literal Processing
+- **Adaptive Conversion**: Appropriately converts string literals within JavaScript attributes
+- **Partial Conversion**: Converts only the first string literal to single quotes, maintaining safety for complex JavaScript code
+- **Event Handler Optimization**: Automatically applied to event handler attributes like onClick, onChange
+- **Non-Greedy Matching**: Achieves precise attribute boundary detection through regex, enabling accurate processing of multiple attributes
 
-### CSRF保護とセキュリティ
-GET以外のHTTPメソッド（POST、PUT、PATCH、DELETE）使用時に自動で`{{ csrf_field() }}`を追加し、Laravelのセキュリティ機能を維持します。
+### CSRF Protection and Security
+Automatically adds `{{ csrf_field() }}` for non-GET HTTP methods (POST, PUT, PATCH, DELETE), maintaining Laravel's security features.
 
-## テスト
+## Testing
 
-### テスト実行
+### Running Tests
 ```bash
-# 全テスト実行
+# Run all tests
 go test -v
 
-# カバレッジ付きテスト実行
+# Run tests with coverage
 go test -cover -v
 
-# 特定のテスト実行
+# Run specific tests
 go test -run TestFormOpen -v
 go test -run TestFormCheckbox -v
 ```
 
-### 包括的テストカバレッジ（3,557行）
-本プロジェクトは23種類すべてのForm Facadeメソッドに対応した徹底的なテストスイートを提供します：
+### Comprehensive Test Coverage (3,557 lines)
+This project provides a thorough test suite covering all 24 Form Facade methods:
 
-#### 基本フォーム要素テスト
-- `form_open_test.go` - Form::open機能（ルート、URL、HTTPメソッド）
-- `form_close_test.go` - Form::close機能
-- `form_text_test.go` - Form::text機能
-- `form_textarea_test.go` - Form::textarea機能
-- `form_hidden_test.go` - Form::hidden機能
-- `form_label_test.go` - Form::label機能
+#### Basic Form Element Tests
+- `form_open_test.go` - Form::open functionality (routes, URLs, HTTP methods)
+- `form_close_test.go` - Form::close functionality
+- `form_text_test.go` - Form::text functionality
+- `form_textarea_test.go` - Form::textarea functionality
+- `form_hidden_test.go` - Form::hidden functionality
+- `form_label_test.go` - Form::label functionality
 
-#### 選択・チェック要素テスト  
-- `form_checkbox_test.go` - Form::checkbox機能（配列対応、動的属性、イベントハンドラー）
-- `form_radio_test.go` - Form::radio機能
-- `form_select_test.go` - Form::select機能（foreachループ生成）
+#### Selection & Check Element Tests  
+- `form_checkbox_test.go` - Form::checkbox functionality (array support, dynamic attributes, event handlers)
+- `form_radio_test.go` - Form::radio functionality
+- `form_select_test.go` - Form::select functionality (foreach loop generation)
 
-#### ボタン要素テスト
-- `form_button_test.go` - Form::button機能（動的disabled属性対応）
-- `form_submit_test.go` - Form::submit機能
+#### Button Element Tests
+- `form_button_test.go` - Form::button functionality (supports dynamic disabled attributes)
+- `form_submit_test.go` - Form::submit functionality
 
-#### 入力タイプ別要素テスト
-- `form_number_test.go` - Form::number機能
-- `form_email_test.go` - Form::email機能
-- `form_password_test.go` - Form::password機能
-- `form_url_test.go` - Form::url機能
-- `form_tel_test.go` - Form::tel機能
-- `form_search_test.go` - Form::search機能
-- `form_file_test.go` - Form::file機能
+#### Input Type-Specific Element Tests
+- `form_number_test.go` - Form::number functionality
+- `form_email_test.go` - Form::email functionality
+- `form_password_test.go` - Form::password functionality
+- `form_url_test.go` - Form::url functionality
+- `form_tel_test.go` - Form::tel functionality
+- `form_search_test.go` - Form::search functionality
+- `form_file_test.go` - Form::file functionality
 
-#### 日時・色・範囲要素テスト
-- `form_date_test.go` - Form::date機能
-- `form_time_test.go` - Form::time機能
-- `form_datetime_test.go` - Form::datetime機能
-- `form_range_test.go` - Form::range機能
-- `form_color_test.go` - Form::color機能
+#### Date, Color & Range Element Tests
+- `form_date_test.go` - Form::date functionality
+- `form_time_test.go` - Form::time functionality
+- `form_datetime_test.go` - Form::datetime functionality
+- `form_range_test.go` - Form::range functionality
+- `form_color_test.go` - Form::color functionality
 
-#### 統合・特殊機能テスト
-- `integration_test.go` - 実際のユースケース統合テスト
-- `dynamic_attribute_detector_test.go` - 動的属性検出機能テスト
-- `dynamic_disabled_test.go` - 動的disabled属性テスト
+#### Integration & Special Feature Tests
+- `integration_test.go` - Real-world use case integration tests
+- `dynamic_attribute_detector_test.go` - Dynamic attribute detection functionality tests
+- `dynamic_disabled_test.go` - Dynamic disabled attribute tests
 
-### テストケースの種類
-各テストファイルには以下のテストケースが含まれます：
-- **基本機能テスト**: 標準的なパラメータパターン
-- **属性処理テスト**: HTML属性の正確な処理と順序
-- **動的属性テスト**: 条件付き属性の処理
-- **文字列連結テスト**: PHP連結のBlade構文変換
-- **エッジケーステスト**: null値、空文字列、特殊文字の処理
-- **配列フィールドテスト**: `name[]`形式の配列対応
-- **イベントハンドラーテスト**: JavaScript属性の適切な処理
+### Test Case Categories
+Each test file includes the following types of test cases:
+- **Basic Functionality Tests**: Standard parameter patterns
+- **Attribute Processing Tests**: Accurate HTML attribute handling and ordering
+- **Dynamic Attribute Tests**: Conditional attribute processing
+- **String Concatenation Tests**: PHP concatenation to Blade syntax conversion
+- **Edge Case Tests**: Handling of null values, empty strings, special characters
+- **Array Field Tests**: Support for `name[]` format arrays
+- **Event Handler Tests**: Proper processing of JavaScript attributes
 
-### testdataディレクトリ
-実際のプロジェクトで使用される複雑なBladeファイルと期待される出力HTMLのサンプルセットを提供：
-- `testdata/blades/` - テスト用Bladeファイル
-- `testdata/expected/` - 期待される出力HTML
-- `testdata/run_tests.sh` - 一括テスト実行スクリプト
+### testdata Directory
+Provides sample sets of complex Blade files and expected HTML output used in real projects:
+- `testdata/blades/` - Test Blade files
+- `testdata/expected/` - Expected HTML output
+- `testdata/run_tests.sh` - Batch test execution script
 
-## 制限事項
+## Limitations
 
-- **Laravel対応**: Laravel 5.x〜8.x のForm Facade構文をサポート
-- **カスタムメソッド**: カスタムForm Facadeメソッドには対応していません
-- **極めて複雑な構文**: 5層以上の深いネストした配列は一部制限があります
-- **動的メソッド名**: 変数によるメソッド名の動的決定（`Form::$method(...)`）は未対応
+- **Laravel Support**: Supports Laravel 5.x~8.x Form Facade syntax
+- **Custom Methods**: Custom Form Facade methods are not supported
+- **Extremely Complex Syntax**: Arrays with 5 or more levels of deep nesting have some limitations
+- **Dynamic Method Names**: Dynamic method name resolution using variables (`Form::$method(...)`) is not supported
 
-## 既知の課題
+## Known Issues
 
-- 非常に複雑なPHP式の評価については完全ではない場合があります
-- 5層以上の深いネストした配列構造は一部制限があります
-- JavaScript文字列リテラル変換は最初の文字列のみが対象（設計仕様）
+- Evaluation of very complex PHP expressions may not be complete in some cases
+- Array structures with 5 or more levels of deep nesting have some limitations
+- JavaScript string literal conversion only applies to the first string (design specification)
 
-これらの制限事項は将来のバージョンで段階的に解決される予定です。ただし、JavaScript文字列リテラルの部分変換は安全性とパフォーマンスのバランスを考慮した設計仕様です。
+These limitations are planned to be gradually resolved in future versions. However, the partial conversion of JavaScript string literals is a design specification that balances safety and performance considerations.
 
-## 貢献
+## Contributing
 
-1. このリポジトリをフォーク
-2. フィーチャーブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add some amazing feature'`)
-4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを作成
+1. Fork this repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Create a Pull Request
 
-## ライセンス
+## License
 
-このプロジェクトはMITライセンスの下で公開されています。詳細は [LICENSE](LICENSE) ファイルを参照してください。
+This project is released under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## 更新履歴
+## Version History
 
-### v2.1.0（最新版）
-- **23種類のForm Facadeメソッド**に対応（v1.0.0の12種類から大幅拡張）
-- **JavaScript文字列リテラル変換機能**追加（イベントハンドラー内の文字列を適切に変換）
-- **高度なイベントハンドラー処理**（onClick、onChange等の複数属性の正確な処理）
-- **非貪欲マッチング正規表現**実装（複雑な属性構造への対応強化）
-- **動的属性処理機能**追加（条件付きdisabled属性、三項演算子サポート）
-- **文字列連結処理機能**追加（PHP文字列連結をBlade構文に自動変換）
-- **AttributeProcessorシステム**実装（属性の統一処理と順序保証）
-- **正規表現キャッシュシステム**実装（パフォーマンス向上）
-- **TDD開発手法**採用（Test-Driven Development）
-- **包括的テストスイート**（3,557行のテストコード）
-- **配列フィールド強化**（`name[]`形式の完全サポート）
-- **複雑な構文サポート**（ネストした配列、論理演算子、メソッドチェーン）
+### v2.1.0 (Latest)
+- **Support for 24 Form Facade methods** (major expansion from 12 methods in v1.0.0)
+- **JavaScript String Literal Conversion feature** added (properly converts strings within event handlers)
+- **Advanced Event Handler Processing** (accurate processing of multiple attributes like onClick, onChange)
+- **Non-greedy Matching Regular Expressions** implementation (enhanced support for complex attribute structures)
+- **Dynamic Attribute Processing feature** added (conditional disabled attributes, ternary operator support)
+- **String Concatenation Processing feature** added (automatic conversion of PHP string concatenation to Blade syntax)
+- **AttributeProcessor System** implementation (unified attribute processing and order guarantee)
+- **Regex Caching System** implementation (performance improvement)
+- **TDD Development Methodology** adoption (Test-Driven Development)
+- **Comprehensive Test Suite** (3,557 lines of test code)
+- **Array Field Enhancement** (complete support for `name[]` format)
+- **Complex Syntax Support** (nested arrays, logical operators, method chaining)
 
 ### v1.0.0
-- Form Facade変換機能の初回リリース
-- 12種類のForm Facadeメソッドをサポート
-- HTML5準拠とCSRF保護機能
-- 基本的なテストスイート
+- Initial release of Form Facade conversion functionality
+- Support for 12 Form Facade methods
+- HTML5 compliance and CSRF protection features
+- Basic test suite
 
-## サポート
+## Support
 
-問題や質問がある場合は、[GitHub Issues](https://github.com/kanChome/form-facade-replacer/issues)で報告してください。
+For issues or questions, please report them at [GitHub Issues](https://github.com/ryohirano/form-facade-replacer/issues).
