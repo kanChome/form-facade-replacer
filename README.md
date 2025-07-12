@@ -13,24 +13,32 @@ Laravel Form Facade を純粋なHTMLタグに変換するGoツールです。Lar
 - **文字列連結処理**: PHP文字列連結を適切なBlade構文に自動変換
 - **HTML5準拠**: 生成されるHTMLはHTML5標準に準拠
 - **AttributeProcessorシステム**: 属性の統一された処理と出力順序の一貫性を保証
-- **イベントハンドラー対応**: onClick、onChange等のJavaScript属性を適切に処理
+- **イベントハンドラー対応**: onClick、onChange等のJavaScript属性を適切に処理（JavaScript文字列リテラル変換機能付き）
 - **Blade構文保持**: Laravel独自のBlade構文（@if、@foreach等）を適切に保持
 - **CSRF保護**: POST/PUT/PATCH/DELETEリクエストには自動でCSRF保護を追加
 - **高性能**: 正規表現キャッシュシステムによる高速処理
-- **包括的テストカバレッジ**: 3,384行の徹底したテストスイート
+- **包括的テストカバレッジ**: 3,557行の徹底したテストスイート
 
 ## インストール
 
+### 要件
+- Go 1.21以上
+
+### インストール手順
+
 ```bash
 # リポジトリをクローン
-git clone https://github.com/your-username/form-facade-replacer.git
+git clone https://github.com/ryohirano/form-facade-replacer.git
 cd form-facade-replacer
 
 # Go modules初期化（必要に応じて）
 go mod tidy
 
-# ビルド
+# 開発ビルド
 go build -o form_facade_replacer form_facade_replacer.go
+
+# リリースビルド（バージョン情報付き）
+go build -ldflags "-X main.version=v2.0.0 -X main.buildDate=$(date +'%Y-%m-%d')" -o form_facade_replacer form_facade_replacer.go
 ```
 
 ## 使用方法
@@ -126,7 +134,7 @@ go run form_facade_replacer.go resources/views/user/create.blade.php
 
 **変換後:**
 ```html
-<input type="checkbox" name="newsletter" value="{{ yes }}" @if(true) checked @endif class="form-check-input">
+<input type="checkbox" name="newsletter" value="{{ 'yes' }}" @if(true) checked @endif class="form-check-input">
 ```
 
 ### Form::button / Form::submit
@@ -139,7 +147,7 @@ go run form_facade_replacer.go resources/views/user/create.blade.php
 
 **変換後:**
 ```html
-<button>{!! クリック !!}</button>
+<button type="button">{!! 'クリック' !!}</button>
 <button type="submit" class="btn btn-primary">送信</button>
 ```
 
@@ -210,8 +218,22 @@ go run form_facade_replacer.go resources/views/user/create.blade.php
 
 **変換後:**
 ```html
-<input type="checkbox" name="notifications[]" value="{{ email }}" @if(in_array(email, (array)old('notifications'))) checked @endif class="notification-toggle" onClick="toggleNotification(this)" onChange="updateSettings()">
+<input type="checkbox" name="notifications[]" value="{{ 'email' }}" @if(in_array('email', (array)old('notifications'))) checked @endif class="notification-toggle" onClick="toggleNotification(this)" onChange="updateSettings()">
 ```
+
+### JavaScript文字列リテラル変換
+
+**変換前:**
+```php
+{!! Form::file('image', ['onchange' => 'previewImage(this, "uploads", "preview")']) !!}
+```
+
+**変換後:**
+```html
+<input type="file" name="image" onchange="previewImage(this, 'uploads', "preview")">
+```
+
+この機能により、JavaScript内の文字列リテラルが部分的にシングルクォートに変換され、HTMLとJavaScriptの適切な分離が実現されます。
 
 ## サポートされるForm Facadeメソッド（23種類）
 
@@ -297,6 +319,12 @@ go run form_facade_replacer.go resources/views/user/create.blade.php
 - **論理演算子**: `&&`, `||`を含む複雑な条件式の処理
 - **メソッドチェーン**: `$user->settings->get('key')`等のメソッドチェーンサポート
 
+### JavaScript文字列リテラル処理
+- **適応的変換**: JavaScript属性内の文字列リテラルを適切に変換
+- **部分変換機能**: 最初の文字列リテラルのみをシングルクォートに変換し、複雑なJavaScriptコードの安全性を保持
+- **イベントハンドラー最適化**: onClick、onChange等のイベントハンドラー属性で自動適用
+- **非貪欲マッチング**: 正規表現による精密な属性境界検出で、複数属性の正確な処理を実現
+
 ### CSRF保護とセキュリティ
 GET以外のHTTPメソッド（POST、PUT、PATCH、DELETE）使用時に自動で`{{ csrf_field() }}`を追加し、Laravelのセキュリティ機能を維持します。
 
@@ -315,7 +343,7 @@ go test -run TestFormOpen -v
 go test -run TestFormCheckbox -v
 ```
 
-### 包括的テストカバレッジ（3,384行）
+### 包括的テストカバレッジ（3,557行）
 本プロジェクトは23種類すべてのForm Facadeメソッドに対応した徹底的なテストスイートを提供します：
 
 #### 基本フォーム要素テスト
@@ -381,10 +409,11 @@ go test -run TestFormCheckbox -v
 
 ## 既知の課題
 
-- 一部のテストケースで複数イベントハンドラーの引用符処理に軽微な問題が残っています
 - 非常に複雑なPHP式の評価については完全ではない場合があります
+- 5層以上の深いネストした配列構造は一部制限があります
+- JavaScript文字列リテラル変換は最初の文字列のみが対象（設計仕様）
 
-これらの制限事項は将来のバージョンで段階的に解決される予定です。
+これらの制限事項は将来のバージョンで段階的に解決される予定です。ただし、JavaScript文字列リテラルの部分変換は安全性とパフォーマンスのバランスを考慮した設計仕様です。
 
 ## 貢献
 
@@ -400,15 +429,17 @@ go test -run TestFormCheckbox -v
 
 ## 更新履歴
 
-### v2.0.0（最新版）
+### v2.1.0（最新版）
 - **23種類のForm Facadeメソッド**に対応（v1.0.0の12種類から大幅拡張）
+- **JavaScript文字列リテラル変換機能**追加（イベントハンドラー内の文字列を適切に変換）
+- **高度なイベントハンドラー処理**（onClick、onChange等の複数属性の正確な処理）
+- **非貪欲マッチング正規表現**実装（複雑な属性構造への対応強化）
 - **動的属性処理機能**追加（条件付きdisabled属性、三項演算子サポート）
 - **文字列連結処理機能**追加（PHP文字列連結をBlade構文に自動変換）
 - **AttributeProcessorシステム**実装（属性の統一処理と順序保証）
-- **イベントハンドラー対応**（onClick、onChange等のJavaScript属性）
 - **正規表現キャッシュシステム**実装（パフォーマンス向上）
 - **TDD開発手法**採用（Test-Driven Development）
-- **包括的テストスイート**（3,384行のテストコード）
+- **包括的テストスイート**（3,557行のテストコード）
 - **配列フィールド強化**（`name[]`形式の完全サポート）
 - **複雑な構文サポート**（ネストした配列、論理演算子、メソッドチェーン）
 
