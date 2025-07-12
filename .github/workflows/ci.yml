@@ -170,10 +170,12 @@ jobs:
           fi
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }}
           path: form-facade-replacer-*
+          if-no-files-found: error
+          compression-level: 6
 
   # テスト統計とサマリー
   test-summary:
