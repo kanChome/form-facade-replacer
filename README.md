@@ -21,7 +21,6 @@ This tool analyzes Blade template files (.blade.php) that use Laravel's Form Fac
 - **Blade Syntax Preservation**: Maintains Laravel-specific Blade syntax (@if, @foreach, etc.)
 - **CSRF Protection**: Automatically adds CSRF protection for POST/PUT/PATCH/DELETE requests
 - **High Performance**: Fast processing through regex caching system
-- **Comprehensive Test Coverage**: Thorough test suite with 3,557 lines of code
 
 ## Installation
 
@@ -351,7 +350,7 @@ go test -run TestFormOpen -v
 go test -run TestFormCheckbox -v
 ```
 
-### Comprehensive Test Coverage (3,557 lines)
+### Comprehensive Test Coverage
 This project provides a thorough test suite covering all 24 Form Facade methods:
 
 #### Basic Form Element Tests
@@ -387,10 +386,8 @@ This project provides a thorough test suite covering all 24 Form Facade methods:
 - `form_range_test.go` - Form::range functionality
 - `form_color_test.go` - Form::color functionality
 
-#### Integration & Special Feature Tests
+#### Integration Tests
 - `integration_test.go` - Real-world use case integration tests
-- `dynamic_attribute_detector_test.go` - Dynamic attribute detection functionality tests
-- `dynamic_disabled_test.go` - Dynamic disabled attribute tests
 
 ### Test Case Categories
 Each test file includes the following types of test cases:
@@ -402,15 +399,9 @@ Each test file includes the following types of test cases:
 - **Array Field Tests**: Support for `name[]` format arrays
 - **Event Handler Tests**: Proper processing of JavaScript attributes
 
-### testdata Directory
-Provides sample sets of complex Blade files and expected HTML output used in real projects:
-- `testdata/blades/` - Test Blade files
-- `testdata/expected/` - Expected HTML output
-- `testdata/run_tests.sh` - Batch test execution script
-
 ## Limitations
 
-- **Laravel Support**: Supports Laravel 5.x~8.x Form Facade syntax
+- **Laravel Support**: Supports Form Facade syntax generated with laravelCollective/html
 - **Custom Methods**: Custom Form Facade methods are not supported
 - **Extremely Complex Syntax**: Arrays with 5 or more levels of deep nesting have some limitations
 - **Dynamic Method Names**: Dynamic method name resolution using variables (`Form::$method(...)`) is not supported
@@ -434,28 +425,6 @@ These limitations are planned to be gradually resolved in future versions. Howev
 ## License
 
 This project is released under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Version History
-
-### v2.1.0 (Latest)
-- **Support for 24 Form Facade methods** (major expansion from 12 methods in v1.0.0)
-- **JavaScript String Literal Conversion feature** added (properly converts strings within event handlers)
-- **Advanced Event Handler Processing** (accurate processing of multiple attributes like onClick, onChange)
-- **Non-greedy Matching Regular Expressions** implementation (enhanced support for complex attribute structures)
-- **Dynamic Attribute Processing feature** added (conditional disabled attributes, ternary operator support)
-- **String Concatenation Processing feature** added (automatic conversion of PHP string concatenation to Blade syntax)
-- **AttributeProcessor System** implementation (unified attribute processing and order guarantee)
-- **Regex Caching System** implementation (performance improvement)
-- **TDD Development Methodology** adoption (Test-Driven Development)
-- **Comprehensive Test Suite** (3,557 lines of test code)
-- **Array Field Enhancement** (complete support for `name[]` format)
-- **Complex Syntax Support** (nested arrays, logical operators, method chaining)
-
-### v1.0.0
-- Initial release of Form Facade conversion functionality
-- Support for 12 Form Facade methods
-- HTML5 compliance and CSRF protection features
-- Basic test suite
 
 ## Support
 

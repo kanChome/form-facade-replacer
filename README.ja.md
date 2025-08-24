@@ -8,7 +8,7 @@ Laravel Form Facade を純粋なHTMLタグに変換するGoツールです。Lar
 
 ## 概要
 
-このツールは、LaravelのForm Facadeを使用したBladeテンプレートファイル（.blade.php）を解析し、対応するHTMLフォーム要素に自動変換します。変換により、Laravelフレームワークに依存しない、純粋なHTML + Blade構文のテンプレートファイルを生成できます。
+このツールは、`laravelCollective/html`を用いて生成されたForm Facadeを使用したBladeテンプレートファイル（.blade.php）を解析し、対応するHTMLフォーム要素に自動変換します。変換により、Laravelフレームワークに依存しない、純粋なHTML + Blade構文のテンプレートファイルを生成できます。
 
 ## 特徴
 
@@ -21,7 +21,6 @@ Laravel Form Facade を純粋なHTMLタグに変換するGoツールです。Lar
 - **Blade構文保持**: Laravel独自のBlade構文（@if、@foreach等）を適切に保持
 - **CSRF保護**: POST/PUT/PATCH/DELETEリクエストには自動でCSRF保護を追加
 - **高性能**: 正規表現キャッシュシステムによる高速処理
-- **包括的テストカバレッジ**: 3,557行の徹底したテストスイート
 
 ## インストール
 
@@ -347,8 +346,8 @@ go test -run TestFormOpen -v
 go test -run TestFormCheckbox -v
 ```
 
-### 包括的テストカバレッジ（3,557行）
-本プロジェクトは24種類すべてのForm Facadeメソッドに対応した徹底的なテストスイートを提供します：
+### テストカバレッジ
+本プロジェクトは24種類すべてのForm Facadeメソッドに対応した徹底的なテストスイートを提供します。
 
 #### 基本フォーム要素テスト
 - `form_open_test.go` - Form::open機能（ルート、URL、HTTPメソッド）
@@ -383,10 +382,8 @@ go test -run TestFormCheckbox -v
 - `form_range_test.go` - Form::range機能
 - `form_color_test.go` - Form::color機能
 
-#### 統合・特殊機能テスト
+#### 統合テスト
 - `integration_test.go` - 実際のユースケース統合テスト
-- `dynamic_attribute_detector_test.go` - 動的属性検出機能テスト
-- `dynamic_disabled_test.go` - 動的disabled属性テスト
 
 ### テストケースの種類
 各テストファイルには以下のテストケースが含まれます：
@@ -398,15 +395,9 @@ go test -run TestFormCheckbox -v
 - **配列フィールドテスト**: `name[]`形式の配列対応
 - **イベントハンドラーテスト**: JavaScript属性の適切な処理
 
-### testdataディレクトリ
-実際のプロジェクトで使用される複雑なBladeファイルと期待される出力HTMLのサンプルセットを提供：
-- `testdata/blades/` - テスト用Bladeファイル
-- `testdata/expected/` - 期待される出力HTML
-- `testdata/run_tests.sh` - 一括テスト実行スクリプト
-
 ## 制限事項
 
-- **Laravel対応**: Laravel 5.x〜8.x のForm Facade構文をサポート
+- **Laravel対応**: laravelCollective/htmlを用いて生成したのForm Facade構文をサポート
 - **カスタムメソッド**: カスタムForm Facadeメソッドには対応していません
 - **極めて複雑な構文**: 5層以上の深いネストした配列は一部制限があります
 - **動的メソッド名**: 変数によるメソッド名の動的決定（`Form::$method(...)`）は未対応
@@ -430,28 +421,6 @@ go test -run TestFormCheckbox -v
 ## ライセンス
 
 このプロジェクトはMITライセンスの下で公開されています。詳細は [LICENSE](LICENSE) ファイルを参照してください。
-
-## 更新履歴
-
-### v2.1.0（最新版）
-- **24種類のForm Facadeメソッド**に対応（v1.0.0の12種類から大幅拡張）
-- **JavaScript文字列リテラル変換機能**追加（イベントハンドラー内の文字列を適切に変換）
-- **高度なイベントハンドラー処理**（onClick、onChange等の複数属性の正確な処理）
-- **非貪欲マッチング正規表現**実装（複雑な属性構造への対応強化）
-- **動的属性処理機能**追加（条件付きdisabled属性、三項演算子サポート）
-- **文字列連結処理機能**追加（PHP文字列連結をBlade構文に自動変換）
-- **AttributeProcessorシステム**実装（属性の統一処理と順序保証）
-- **正規表現キャッシュシステム**実装（パフォーマンス向上）
-- **TDD開発手法**採用（Test-Driven Development）
-- **包括的テストスイート**（3,557行のテストコード）
-- **配列フィールド強化**（`name[]`形式の完全サポート）
-- **複雑な構文サポート**（ネストした配列、論理演算子、メソッドチェーン）
-
-### v1.0.0
-- Form Facade変換機能の初回リリース
-- 12種類のForm Facadeメソッドをサポート
-- HTML5準拠とCSRF保護機能
-- 基本的なテストスイート
 
 ## サポート
 
