@@ -3,10 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 env:
-  GO_VERSION: '1.21'
+  GO_VERSION: "1.21"
 
 jobs:
   # バイナリビルド - 複数プラットフォーム対応
@@ -37,51 +37,51 @@ jobs:
             name: freebsd-amd64
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ env.GO_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Cache Go modules
-      uses: actions/cache@v3
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-    - name: Get version from tag
-      id: version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-    - name: Build binary
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-        CGO_ENABLED: 0
-      run: |
-        echo "🏗️ Building form-facade-replacer for ${{ matrix.goos }}/${{ matrix.goarch }}"
-        
-        # Set binary name with version
-        BINARY_NAME="form-facade-replacer-${{ steps.version.outputs.VERSION }}-${{ matrix.name }}${{ matrix.ext }}"
-        
-        # Build with optimization and version info
-        go build \
-          -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }} -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          -o "${BINARY_NAME}" \
-          .
-        
-        echo "✅ Built: ${BINARY_NAME}"
-        ls -la "${BINARY_NAME}"
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          echo "🏗️ Building form-facade-replacer for ${{ matrix.goos }}/${{ matrix.goarch }}"
 
-    - name: Upload binary artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: form-facade-replacer-${{ matrix.name }}
-        path: form-facade-replacer-*
+          # Set binary name with version
+          BINARY_NAME="form-facade-replacer-${{ steps.version.outputs.VERSION }}-${{ matrix.name }}${{ matrix.ext }}"
+
+          # Build with optimization and version info
+          go build \
+            -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }} -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "${BINARY_NAME}" \
+            .
+
+          echo "✅ Built: ${BINARY_NAME}"
+          ls -la "${BINARY_NAME}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: form-facade-replacer-${{ matrix.name }}
+          path: form-facade-replacer-*
 
   # リリースの作成とアップロード
   release:
@@ -90,129 +90,129 @@ jobs:
     needs: build
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # 全履歴を取得（チェンジログ生成用）
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 全履歴を取得（チェンジログ生成用）
 
-    - name: Get version from tag
-      id: version
-      run: |
-        VERSION=${GITHUB_REF#refs/tags/}
-        echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-        echo "VERSION_NUM=${VERSION#v}" >> $GITHUB_OUTPUT
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION_NUM=${VERSION#v}" >> $GITHUB_OUTPUT
 
-    - name: Download all artifacts
-      uses: actions/download-artifact@v3
-      with:
-        path: ./artifacts
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
 
-    - name: Prepare release assets
-      run: |
-        echo "📦 Preparing release assets..."
-        mkdir -p release
-        
-        # Move all binaries to release directory
-        find ./artifacts -name "form-facade-replacer-*" -exec cp {} ./release/ \;
-        
-        # Create checksums
-        cd release
-        sha256sum form-facade-replacer-* > checksums.txt
-        
-        echo "📋 Release assets:"
-        ls -la
-        echo ""
-        echo "🔒 Checksums:"
-        cat checksums.txt
+      - name: Prepare release assets
+        run: |
+          echo "📦 Preparing release assets..."
+          mkdir -p release
 
-    - name: Generate changelog
-      id: changelog
-      run: |
-        echo "📝 Generating changelog..."
-        
-        # Get previous tag for changelog generation
-        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        
-        if [ -n "$PREV_TAG" ]; then
-          echo "Comparing $PREV_TAG..${{ steps.version.outputs.VERSION }}"
-          
-          # Generate changelog from commit messages
-          CHANGELOG=$(git log --pretty=format:"- %s (%an)" $PREV_TAG..${{ steps.version.outputs.VERSION }} | head -20)
-          
-          if [ -n "$CHANGELOG" ]; then
-            echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-            echo "## 🚀 What's Changed" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "$CHANGELOG" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ steps.version.outputs.VERSION }}" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+          # Move all binaries to release directory
+          find ./artifacts -name "form-facade-replacer-*" -exec cp {} ./release/ \;
+
+          # Create checksums
+          cd release
+          sha256sum form-facade-replacer-* > checksums.txt
+
+          echo "📋 Release assets:"
+          ls -la
+          echo ""
+          echo "🔒 Checksums:"
+          cat checksums.txt
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "📝 Generating changelog..."
+
+          # Get previous tag for changelog generation
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "Comparing $PREV_TAG..${{ steps.version.outputs.VERSION }}"
+            
+            # Generate changelog from commit messages
+            CHANGELOG=$(git log --pretty=format:"- %s (%an)" $PREV_TAG..${{ steps.version.outputs.VERSION }} | head -20)
+            
+            if [ -n "$CHANGELOG" ]; then
+              echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+              echo "## 🚀 What's Changed" >> $GITHUB_OUTPUT
+              echo "" >> $GITHUB_OUTPUT
+              echo "$CHANGELOG" >> $GITHUB_OUTPUT
+              echo "" >> $GITHUB_OUTPUT
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ steps.version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            else
+              echo "CHANGELOG=Initial release" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "CHANGELOG=Initial release" >> $GITHUB_OUTPUT
+            echo "CHANGELOG=🎉 Initial release of Form Facade Replacer!" >> $GITHUB_OUTPUT
           fi
-        else
-          echo "CHANGELOG=🎉 Initial release of Form Facade Replacer!" >> $GITHUB_OUTPUT
-        fi
 
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ steps.version.outputs.VERSION }}
-        name: Form Facade Replacer ${{ steps.version.outputs.VERSION }}
-        body: |
-          # 📋 Form Facade Replacer ${{ steps.version.outputs.VERSION }}
-          
-          Laravel Form Facade を HTML に変換するGoツールの新しいリリースです。
-          
-          ## 📥 インストール
-          
-          ### バイナリのダウンロード
-          お使いのプラットフォームに対応するバイナリをダウンロードしてください：
-          
-          - **Linux (x64)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-linux-amd64`
-          - **Linux (ARM64)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-linux-arm64`
-          - **macOS (Intel)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-darwin-amd64`
-          - **macOS (Apple Silicon)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-darwin-arm64`
-          - **Windows (x64)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-windows-amd64.exe`
-          - **FreeBSD (x64)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-freebsd-amd64`
-          
-          ### 使用方法
-          ```bash
-          # ファイルを変換
-          ./form-facade-replacer path/to/blade/file.blade.php
-          
-          # ディレクトリを再帰的に変換
-          ./form-facade-replacer path/to/blade/directory/
-          ```
-          
-          ## 🔒 セキュリティ
-          
-          全てのバイナリのSHA256チェックサムは `checksums.txt` ファイルで確認できます。
-          
-          ## 🎯 サポートされている機能
-          
-          - ✅ Form::open() / Form::close()
-          - ✅ Form::text() / Form::email() / Form::password()
-          - ✅ Form::input() - 全HTML5入力タイプ対応
-          - ✅ Form::radio() / Form::checkbox()
-          - ✅ Form::select() / Form::textarea()
-          - ✅ Form::submit() / Form::button()
-          - ✅ Form::file() / Form::hidden()
-          - ✅ 複雑なBlade構文とPHP文字列連結対応
-          - ✅ 25種類のForm要素の完全サポート
-          
-          ${{ steps.changelog.outputs.CHANGELOG }}
-          
-          ---
-          
-          **⭐ このプロジェクトが役に立った場合は、GitHubでスターをお願いします！**
-        files: |
-          release/*
-        draft: false
-        prerelease: false
-        generate_release_notes: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Form Facade Replacer ${{ steps.version.outputs.VERSION }}
+          body: |
+            # 📋 Form Facade Replacer ${{ steps.version.outputs.VERSION }}
+
+            Laravel Form Facade を HTML に変換するGoツールの新しいリリースです。
+
+            ## 📥 インストール
+
+            ### バイナリのダウンロード
+            お使いのプラットフォームに対応するバイナリをダウンロードしてください：
+
+            - **Linux (x64)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-linux-amd64`
+            - **Linux (ARM64)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-linux-arm64`
+            - **macOS (Intel)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-darwin-amd64`
+            - **macOS (Apple Silicon)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-darwin-arm64`
+            - **Windows (x64)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-windows-amd64.exe`
+            - **FreeBSD (x64)**: `form-facade-replacer-${{ steps.version.outputs.VERSION }}-freebsd-amd64`
+
+            ### 使用方法
+            ```bash
+            # ファイルを変換
+            ./form-facade-replacer path/to/blade/file.blade.php
+
+            # ディレクトリを再帰的に変換
+            ./form-facade-replacer path/to/blade/directory/
+            ```
+
+            ## 🔒 セキュリティ
+
+            全てのバイナリのSHA256チェックサムは `checksums.txt` ファイルで確認できます。
+
+            ## 🎯 サポートされている機能
+
+            - ✅ Form::open() / Form::close()
+            - ✅ Form::text() / Form::email() / Form::password()
+            - ✅ Form::input() - 全HTML5入力タイプ対応
+            - ✅ Form::radio() / Form::checkbox()
+            - ✅ Form::select() / Form::textarea()
+            - ✅ Form::submit() / Form::button()
+            - ✅ Form::file() / Form::hidden()
+            - ✅ 複雑なBlade構文とPHP文字列連結対応
+            - ✅ 25種類のForm要素の完全サポート
+
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ---
+
+            **⭐ このプロジェクトが役に立った場合は、GitHubでスターをお願いします！**
+          files: |
+            release/*
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # リリース成功通知
   notify:
@@ -222,8 +222,8 @@ jobs:
     if: success()
 
     steps:
-    - name: Success notification
-      run: |
-        echo "🎉 Release ${{ github.ref_name }} created successfully!"
-        echo "📦 Binaries built for multiple platforms"
-        echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+      - name: Success notification
+        run: |
+          echo "🎉 Release ${{ github.ref_name }} created successfully!"
+          echo "📦 Binaries built for multiple platforms"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
