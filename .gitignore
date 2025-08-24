@@ -30,3 +30,15 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+.claude
+.serena
+/testdata
+/testdata/**
+
+# TDD and development artifacts
+TDD_IMPLEMENTATION_PLAN.md
+
+# Keep important test files (正式なユニットテストファイルは除外しない)
+!form_*_test.go
+!integration_test.go
