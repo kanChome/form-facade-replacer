@@ -1,10 +1,13 @@
+// inputs_numeric.go: 数値/範囲入力の置換ロジック。
 package ffr
 
 import (
-	"fmt"
-	"strings"
+    "fmt"
+    "strings"
 )
 
+// --- Number ---
+// replaceFormNumber は Blade 内の Form::number(...) を HTML に置換する。
 func replaceFormNumber(text string) string {
 	patterns := []string{
 		`(?s)\{\{\s*Form::number\(\s*(.*?)\s*\)\s*\}\}`,
@@ -24,6 +27,7 @@ func replaceFormNumber(text string) string {
 	return text
 }
 
+// processFormNumber は number の属性・value を解決して最終HTMLを生成する。
 func processFormNumber(params []string) string {
 	if len(params) < 1 {
 		return ""
@@ -59,6 +63,8 @@ func processFormNumber(params []string) string {
 	return fmt.Sprintf(`<input type="number" name="%s"%s%s>`, name, valueAttr, extraAttrs)
 }
 
+// --- Range ---
+// replaceFormRange は Blade 内の Form::range(...) を HTML に置換する。
 func replaceFormRange(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::range\(\s*(.*?)\s*\)\s*\!\!\}`,

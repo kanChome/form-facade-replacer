@@ -1,7 +1,10 @@
+// choices_select.go: セレクトボックス要素の置換ロジック。
 package ffr
 
 import "fmt"
 
+// --- Select ---
+// replaceFormSelect は Blade 内の Form::select(...) を HTML に置換する。
 func replaceFormSelect(text string) string {
 	patterns := []string{
 		`(?s)\{\{\s*Form::select\(\s*(.*?)\s*\)\s*\}\}`,
@@ -21,6 +24,7 @@ func replaceFormSelect(text string) string {
 	return text
 }
 
+// processFormSelect は Select 要素の属性・selected を解決して最終HTMLを生成する。
 func processFormSelect(params []string) string {
 	if len(params) < 2 {
 		return ""

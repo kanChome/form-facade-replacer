@@ -1,10 +1,13 @@
+// choices_radio.go: ラジオボタン要素の置換ロジック。
 package ffr
 
 import (
-	"fmt"
-	"strings"
+    "fmt"
+    "strings"
 )
 
+// --- Radio ---
+// replaceFormRadio は Blade 内の Form::radio(...) を HTML に置換する。
 func replaceFormRadio(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::radio\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -24,6 +27,7 @@ func replaceFormRadio(text string) string {
 	return text
 }
 
+// processFormRadio は Radio 要素の属性・checked を解決して最終HTMLを生成する。
 func processFormRadio(params []string) string {
 	if len(params) < 2 {
 		return ""

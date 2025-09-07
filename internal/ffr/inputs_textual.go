@@ -1,9 +1,12 @@
+// inputs_textual.go: テキスト系入力（text/email/password/url/tel/search、動的input）の置換ロジック。
 package ffr
 
 import (
-	"fmt"
+    "fmt"
 )
 
+// --- Text ---
+// replaceFormText は Blade 内の Form::text(...) を HTML に置換する。
 func replaceFormText(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::text\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -23,6 +26,8 @@ func replaceFormText(text string) string {
 	return text
 }
 
+// --- Email ---
+// replaceFormEmail は Blade 内の Form::email(...) を HTML に置換する。
 func replaceFormEmail(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::email\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -42,6 +47,8 @@ func replaceFormEmail(text string) string {
 	return text
 }
 
+// --- Password ---
+// replaceFormPassword は Blade 内の Form::password(...) を HTML に置換する。
 func replaceFormPassword(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::password\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -61,6 +68,8 @@ func replaceFormPassword(text string) string {
 	return text
 }
 
+// --- URL ---
+// replaceFormUrl は Blade 内の Form::url(...) を HTML に置換する。
 func replaceFormUrl(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::url\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -80,6 +89,8 @@ func replaceFormUrl(text string) string {
 	return text
 }
 
+// --- Tel ---
+// replaceFormTel は Blade 内の Form::tel(...) を HTML に置換する。
 func replaceFormTel(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::tel\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -99,6 +110,8 @@ func replaceFormTel(text string) string {
 	return text
 }
 
+// --- Search ---
+// replaceFormSearch は Blade 内の Form::search(...) を HTML に置換する。
 func replaceFormSearch(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::search\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -118,7 +131,8 @@ func replaceFormSearch(text string) string {
 	return text
 }
 
-// 動的な Form::input(type, name, value, attrs)
+// --- Dynamic Input ---
+// replaceFormInput は Form::input(type, name, value, attrs) を動的に処理する。
 func replaceFormInput(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::input\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -138,6 +152,7 @@ func replaceFormInput(text string) string {
 	return text
 }
 
+// processFormInput はテキスト系 input の共通HTMLを生成する。
 func processFormInput(inputType string, params []string) string {
 	if len(params) < 1 {
 		return ""
@@ -164,6 +179,7 @@ func processFormInput(inputType string, params []string) string {
 	return fmt.Sprintf(`<input type="%s" name="%s" value="%s"%s>`, inputType, name, formattedValue, extraAttrs)
 }
 
+// processFormPassword は password 用の属性（required等）を処理してHTMLを生成する。
 func processFormPassword(params []string) string {
 	if len(params) < 1 {
 		return ""

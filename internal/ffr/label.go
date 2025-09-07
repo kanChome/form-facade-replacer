@@ -1,7 +1,10 @@
+// label.go: ラベル要素の置換ロジック。
 package ffr
 
 import "fmt"
 
+// --- Label ---
+// replaceFormLabel は Blade 内の Form::label(...) を HTML に置換する。
 func replaceFormLabel(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::label\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -21,6 +24,7 @@ func replaceFormLabel(text string) string {
 	return text
 }
 
+// processFormLabel は for/表示テキスト/追加属性を解決して最終HTMLを生成する。
 func processFormLabel(params []string) string {
 	if len(params) < 1 {
 		return ""

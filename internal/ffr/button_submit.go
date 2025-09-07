@@ -1,10 +1,13 @@
+// button_submit.go: ボタン/サブミット要素の置換ロジック。
 package ffr
 
 import (
-	"fmt"
-	"strings"
+    "fmt"
+    "strings"
 )
 
+// --- Button ---
+// replaceFormButton は Blade 内の Form::button(...) を HTML に置換する。
 func replaceFormButton(text string) string {
 	singleParamPatterns := []string{
 		`(?s)\{\{\s*Form::button\(\s*'([^']*)'\s*\)\s*\}\}`,
@@ -31,6 +34,7 @@ func replaceFormButton(text string) string {
 	return text
 }
 
+// processFormButton は button の属性（type/onclick/data- 等）を整形してHTMLを生成する。
 func processFormButton(textParam, attrs string) string {
 	if attrs == "" {
 		return fmt.Sprintf(`<button>{!! %s !!}</button>`, textParam)
@@ -54,6 +58,8 @@ func processFormButton(textParam, attrs string) string {
 	return fmt.Sprintf(`<button%s>{!! %s !!}</button>`, extraAttrs, textParam)
 }
 
+// --- Submit ---
+// replaceFormSubmit は Blade 内の Form::submit(...) を HTML に置換する。
 func replaceFormSubmit(text string) string {
 	patterns := []string{
 		`(?is)\{\!\!\s*Form::submit\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -73,6 +79,7 @@ func replaceFormSubmit(text string) string {
 	return text
 }
 
+// processFormSubmit は submit のテキストと属性を整形してHTMLを生成する。
 func processFormSubmit(params []string) string {
 	if len(params) < 1 {
 		return ""

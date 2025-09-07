@@ -1,5 +1,8 @@
+// inputs_datetime.go: 日付/時間/日時入力の置換ロジック。
 package ffr
 
+// --- Date ---
+// replaceFormDate は Blade 内の Form::date(...) を HTML に置換する。
 func replaceFormDate(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::date\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -19,6 +22,8 @@ func replaceFormDate(text string) string {
 	return text
 }
 
+// --- Time ---
+// replaceFormTime は Blade 内の Form::time(...) を HTML に置換する。
 func replaceFormTime(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::time\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -38,6 +43,8 @@ func replaceFormTime(text string) string {
 	return text
 }
 
+// --- Datetime ---
+// replaceFormDatetime は Blade 内の Form::datetime(...) を HTML に置換する。
 func replaceFormDatetime(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::datetime\(\s*(.*?)\s*\)\s*\!\!\}`,

@@ -1,10 +1,13 @@
+// choices_checkbox.go: チェックボックス要素の置換ロジック。
 package ffr
 
 import (
-	"fmt"
-	"strings"
+    "fmt"
+    "strings"
 )
 
+// --- Checkbox ---
+// replaceFormCheckbox は Blade 内の Form::checkbox(...) を HTML に置換する。
 func replaceFormCheckbox(text string) string {
 	patterns := []string{
 		`(?s)\{\{\s*Form::checkbox\(\s*(.*?)\s*\)\s*\}\}`,
@@ -24,6 +27,7 @@ func replaceFormCheckbox(text string) string {
 	return text
 }
 
+// processFormCheckbox は Checkbox 要素の属性・checked を解決して最終HTMLを生成する。
 func processFormCheckbox(params []string) string {
 	if len(params) < 1 {
 		return ""

@@ -1,3 +1,4 @@
+// textarea.go: テキストエリア要素の置換ロジック。
 package ffr
 
 import (
@@ -5,6 +6,8 @@ import (
 	"strings"
 )
 
+// --- Textarea ---
+// replaceFormTextarea は Blade 内の Form::textarea(...) を HTML に置換する。
 func replaceFormTextarea(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::textarea\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -24,6 +27,7 @@ func replaceFormTextarea(text string) string {
 	return text
 }
 
+// processFormTextarea は rows/placeholder など属性と値を整形し最終HTMLを生成する。
 func processFormTextarea(params []string) string {
 	if len(params) < 1 {
 		return ""

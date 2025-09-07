@@ -1,10 +1,13 @@
+// forms_open_close.go: フォーム開始/終了と関連抽出ヘルパの置換ロジック。
 package ffr
 
 import (
-	"fmt"
-	"strings"
+    "fmt"
+    "strings"
 )
 
+// --- Open/Close ---
+// replaceFormOpen は Blade 内の Form::open([...]) を <form> に置換する。
 func replaceFormOpen(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::open\(\s*\[\s*(.*?)\s*\]\s*\)\s*\!\!\}`,
@@ -19,6 +22,7 @@ func replaceFormOpen(text string) string {
 	return text
 }
 
+// processFormOpen は open のオプション（action/method/attrs）を解析して form タグを生成する。
 func processFormOpen(content string) string {
 	action := extractFormAction(content)
 	method := extractFormMethod(content)
@@ -26,6 +30,7 @@ func processFormOpen(content string) string {
 	return buildFormTag(action, method, extraAttrs)
 }
 
+// extractFormAction は route/url 指定から action を抽出する（route を優先）。
 func extractFormAction(content string) string {
 	paramRouteStart := regexCache.GetRegex(`'route'\s*=>\s*\[\s*'([^']+)'\s*,\s*`)
 	if startMatch := paramRouteStart.FindStringSubmatchIndex(content); len(startMatch) > 3 {
@@ -47,6 +52,7 @@ func extractFormAction(content string) string {
 	return extractFormUrl(content)
 }
 
+// extractRouteParamsBalanced は route 配列引数をバランスした括弧で抽出する。
 func extractRouteParamsBalanced(content string) string {
 	var result strings.Builder
 	var bracketCount int
@@ -88,6 +94,7 @@ func extractRouteParamsBalanced(content string) string {
 	return ""
 }
 
+// extractFormUrl は open の url オプションを抽出する。
 func extractFormUrl(content string) string {
 	urlRe := regexCache.GetRegex(`'url'\s*=>\s*([^,\]]+)`)
 	if matches := urlRe.FindStringSubmatch(content); len(matches) > 1 {
@@ -104,6 +111,7 @@ func extractFormUrl(content string) string {
 	return ""
 }
 
+// extractFormMethod は HTTP メソッドを抽出する（既定は GET）。
 func extractFormMethod(content string) string {
 	methodRe := regexCache.GetRegex(`'method'\s*=>\s*'([^']+)'`)
 	if methodRe.MatchString(content) {
@@ -112,6 +120,7 @@ func extractFormMethod(content string) string {
 	return "GET"
 }
 
+// extractFormAttributes は id/class/target などの追加属性を整形する。
 func extractFormAttributes(content string) string {
 	attrProcessor := &AttributeProcessor{
 		Order: []string{"class", "id", "target"},
@@ -124,6 +133,7 @@ func extractFormAttributes(content string) string {
 	return attrProcessor.ProcessAttributes(content)
 }
 
+// buildFormTag は method に応じて CSRF を付与しつつ form タグを構築する。
 func buildFormTag(action, method, extraAttrs string) string {
 	if strings.ToUpper(method) == "GET" {
 		return fmt.Sprintf(`<form action="%s" method="%s"%s>`, action, method, extraAttrs)
@@ -132,6 +142,7 @@ func buildFormTag(action, method, extraAttrs string) string {
 {{ csrf_field() }}`, action, method, extraAttrs)
 }
 
+// replaceFormClose は Form::close() を </form> に置換する。
 func replaceFormClose(text string) string {
 	return ProcessBladePatterns(text, `Form::close\(\)`, func(content string) string {
 		return "</form>"

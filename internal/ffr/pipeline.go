@@ -1,12 +1,13 @@
+// pipeline.go: ファイル/ディレクトリ走査と1ファイル処理のパイプライン。
 package ffr
 
 import (
-	"bufio"
-	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
+    "bufio"
+    "fmt"
+    "io/fs"
+    "os"
+    "path/filepath"
+    "strings"
 )
 
 type ReplacementConfig struct {
@@ -16,6 +17,7 @@ type ReplacementConfig struct {
 	FileCount      int
 }
 
+// processBladeFiles はディレクトリ（または単一ファイル）を走査して置換処理を行う。
 func processBladeFiles(config *ReplacementConfig) error {
 	if config.IsFile {
 		return processSingleFile(config, config.TargetPath)
@@ -32,6 +34,7 @@ func processBladeFiles(config *ReplacementConfig) error {
 	})
 }
 
+// processSingleFile は1ファイルの置換と進捗集計を行う。
 func processSingleFile(config *ReplacementConfig, filePath string) error {
 	hasFormFacade, err := containsFormFacade(filePath)
 	if err != nil {
@@ -51,6 +54,7 @@ func processSingleFile(config *ReplacementConfig, filePath string) error {
 	return nil
 }
 
+// containsFormFacade はファイル内に "Form::" が存在するかを高速に判定する。
 func containsFormFacade(filePath string) (bool, error) {
 	file, err := os.Open(filePath)
 	if err != nil {

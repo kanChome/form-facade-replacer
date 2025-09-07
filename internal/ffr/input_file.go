@@ -1,10 +1,13 @@
+// input_file.go: ファイル入力要素の置換ロジック。
 package ffr
 
 import (
-	"fmt"
-	"strings"
+    "fmt"
+    "strings"
 )
 
+// --- File ---
+// replaceFormFile は Blade 内の Form::file(...) を HTML に置換する。
 func replaceFormFile(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::file\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -25,6 +28,7 @@ func replaceFormFile(text string) string {
 	return text
 }
 
+// processFormFile は File 要素の属性（accept/multiple/イベント等）を解決して最終HTMLを生成する。
 func processFormFile(params []string) string {
 	if len(params) < 1 {
 		return ""

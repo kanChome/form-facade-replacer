@@ -1,14 +1,16 @@
+// summary.go: 処理結果のサマリと残存パターン検出のロジック。
 package ffr
 
 import (
-	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
+    "fmt"
+    "io/fs"
+    "os"
+    "path/filepath"
+    "sort"
+    "strings"
 )
 
+// printSummary は処理件数・処理済みファイルと残存Form::パターンを表示する。
 func printSummary(config *ReplacementConfig) {
 	fmt.Println()
 	fmt.Println("=== 置換結果サマリー ===")
@@ -49,6 +51,7 @@ func printSummary(config *ReplacementConfig) {
 	fmt.Println("置換処理が完了しました！")
 }
 
+// findRemainingFormFacades は対象ディレクトリ配下で Form:: を含むファイルを列挙する。
 func findRemainingFormFacades(targetDir string) []string {
 	var remainingFiles []string
 	filepath.WalkDir(targetDir, func(path string, d fs.DirEntry, err error) error {
@@ -67,6 +70,7 @@ func findRemainingFormFacades(targetDir string) []string {
 	return remainingFiles
 }
 
+// showRemainingPatterns は指定ファイル群の行単位で残存 Form:: パターンを出力する。
 func showRemainingPatterns(files []string) {
 	for _, file := range files {
 		content, err := os.ReadFile(file)

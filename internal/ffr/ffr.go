@@ -1,17 +1,21 @@
+// ffr.go: パッケージ横断の共通ロジックとディスパッチャの実装。
 package ffr
 
 import (
-	"fmt"
-	"os"
-	"strings"
+    "fmt"
+    "os"
+    "strings"
 )
 
 // バージョン情報（リリース時にldフラグで設定される）
+// バージョン情報（ldflagsで上書きされる）
 var (
-	version   = "dev"
-	buildDate = "unknown"
+    version   = "dev"
+    buildDate = "unknown"
 )
 
+// --- Meta (usage/version) ---
+// printUsage は CLI の使用方法を表示する（internal/ffr/cli.go から利用）。
 func printUsage() {
 	fmt.Println("Laravel Form Facade から HTMLタグ置換スクリプト")
 	fmt.Println("使用方法: go run form_facade_replacer.go <ファイルパス|ディレクトリパス>")
@@ -29,6 +33,7 @@ func printUsage() {
 	fmt.Println(" go run form_facade_replacer.go resources/views/hoge/fuga.blade.php")
 }
 
+// printVersion はバージョンとビルド時刻を表示する。
 func printVersion() {
 	fmt.Printf("Form Facade Replacer %s\n", version)
 	fmt.Printf("Build Date: %s\n", buildDate)
@@ -37,18 +42,19 @@ func printVersion() {
 	fmt.Println("https://github.com/ryohirano/form-facade-replacer")
 }
 
-// DynamicAttributePair 動的属性のキーと値のペア
+// --- Dynamic Attributes ---
+// DynamicAttributePair は動的属性のキーと値のペアを表す。
 type DynamicAttributePair struct {
-	Key   string // 動的キー（例: $condition ? 'disabled' : ''）
-	Value string // 動的値（例: $condition ? 'disabled' : null）
+    Key   string // 動的キー（例: $condition ? 'disabled' : ''）
+    Value string // 動的値（例: $condition ? 'disabled' : null）
 }
 
-// detectDynamicAttributes 文字列から動的属性を検出し、DynamicAttributePairの配列を返す
+// detectDynamicAttributes は文字列から動的属性を抽出して配列で返す。
 func detectDynamicAttributes(attrs string) []DynamicAttributePair {
-	return extractDynamicAttributesBalanced(attrs)
+    return extractDynamicAttributesBalanced(attrs)
 }
 
-// extractDynamicAttributesBalanced バランスした括弧を考慮して動的属性を抽出
+// extractDynamicAttributesBalanced はカンマ分割時に括弧/クォートのバランスを考慮して抽出する。
 func extractDynamicAttributesBalanced(attrs string) []DynamicAttributePair {
 	var pairs []DynamicAttributePair
 	var current strings.Builder
@@ -132,7 +138,7 @@ func extractDynamicAttributesBalanced(attrs string) []DynamicAttributePair {
 	return pairs
 }
 
-// parseDynamicAttributePair 動的属性のキーと値を抽出する関数
+// parseDynamicAttributePair は文字列から key=>value 形式の動的属性を解析する。
 func parseDynamicAttributePair(input string) DynamicAttributePair {
 	patterns := []string{
 		// 1. 標準的なパターン: $変数 ? 'キー' : 'キー' => 値
@@ -164,7 +170,7 @@ func parseDynamicAttributePair(input string) DynamicAttributePair {
 	return DynamicAttributePair{}
 }
 
-// isDynamicAttribute 動的属性パターンを検出する関数
+// isDynamicAttribute は与えられた文字列が動的属性の形かどうかを判定する。
 func isDynamicAttribute(input string) bool {
 	// より包括的な動的属性パターンを検出する正規表現
 	// 1. 単純な変数: $変数 ? 'キー' : 'キー' => 値
@@ -190,7 +196,7 @@ func isDynamicAttribute(input string) bool {
 	return false
 }
 
-// processDynamicAttributes 動的属性を処理してHTML属性文字列を生成
+// processDynamicAttributes は動的属性を HTML 属性文字列へ展開する。
 func processDynamicAttributes(attrs string) string {
 	var result strings.Builder
 
@@ -211,6 +217,8 @@ func processDynamicAttributes(attrs string) string {
 	return result.String()
 }
 
+// --- Dispatcher ---
+// replaceFormPatterns は1ファイルの内容を各 replaceXXX に順次通し、結果を書き戻す。
 func replaceFormPatterns(filePath string) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -246,6 +254,8 @@ func replaceFormPatterns(filePath string) error {
 	return os.WriteFile(filePath, []byte(text), 0644)
 }
 
+// --- Hidden ---
+// replaceFormHidden は Form::hidden(...) を <input type="hidden"> に置換する。
 func replaceFormHidden(text string) string {
 	patterns := []string{
 		`(?s)\{\!\!\s*Form::hidden\(\s*(.*?)\s*\)\s*\!\!\}`,
@@ -263,6 +273,7 @@ func replaceFormHidden(text string) string {
 	return text
 }
 
+// processFormHidden は hidden の name/value/属性を整形して最終HTMLを生成する。
 func processFormHidden(params []string) string {
 	if len(params) < 1 {
 		return ""
@@ -294,6 +305,8 @@ func processFormHidden(params []string) string {
 	return fmt.Sprintf(`<input type="hidden" name="%s" value="%s"%s>`, nameAttr, formattedValue, extraAttrs)
 }
 
+// --- Dynamic Input helper ---
+// processFormInputDynamic は Form::input(type, ...) を共通の processFormInput に中継する。
 func processFormInputDynamic(params []string) string {
 	if len(params) < 2 {
 		return ""
@@ -308,6 +321,8 @@ func processFormInputDynamic(params []string) string {
 	return processFormInput(inputType, remainingParams)
 }
 
+// --- Color ---
+// replaceFormColor は Form::color(...) を <input type="color"> に置換する。
 func replaceFormColor(text string) string {
 	// 複雑なネストに対応したパターンに変更
 	// (?s)フラグで改行を含む文字列のマッチを有効化
