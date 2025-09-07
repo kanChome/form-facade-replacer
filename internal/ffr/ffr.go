@@ -486,80 +486,6 @@ func processFormLabel(params []string) string {
 	return fmt.Sprintf(`<label for="%s"%s>{!! %s !!}</label>`, forAttr, extraAttrs, textParam)
 }
 
-// text/email/password/url/tel/search は inputs_textual.go に移動
-
-func replaceFormNumber(text string) string {
-	// 複雑なネストに対応したパターンに変更
-	// (?s)フラグで改行を含む文字列のマッチを有効化
-	patterns := []string{
-		`(?s)\{\{\s*Form::number\(\s*(.*?)\s*\)\s*\}\}`,
-		`(?s)\{\!\!\s*Form::number\(\s*(.*?)\s*\)\s*\!\!\}`,
-	}
-
-	for _, pattern := range patterns {
-		re := regexCache.GetRegex(pattern)
-		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			fullMatch := re.FindStringSubmatch(match)
-			if len(fullMatch) > 1 {
-				paramStr := fullMatch[1]
-				// バランスを考慮したパラメータ抽出に変更
-				params := extractParamsBalanced(paramStr)
-				return processFormNumber(params)
-			}
-			return match
-		})
-	}
-	return text
-}
-
-func processFormNumber(params []string) string {
-	if len(params) < 1 {
-		return ""
-	}
-
-	// PHP文字列連結を含むフィールド名を適切に処理
-	name := ProcessFieldName(params[0])
-	value := ""
-	if len(params) > 1 {
-		value = params[1]
-	}
-
-	attrProcessor := &AttributeProcessor{
-		Order: []string{"placeholder", "class", "id", "min", "max", "step"},
-		Patterns: map[string]string{
-			"placeholder": `'placeholder'\s*=>\s*'([^']+)'`,
-			"class":       `'class'\s*=>\s*'([^']+)'`,
-			"id":          `'id'\s*=>\s*'([^']+)'`,
-			"min":         `'min'\s*=>\s*(\d+)`,
-			"max":         `'max'\s*=>\s*(\d+)`,
-			"step":        `'step'\s*=>\s*(\d+(?:\.\d+)?)`,
-		},
-	}
-
-	extraAttrs := ""
-	if len(params) > 2 {
-		extraAttrs = attrProcessor.ProcessAttributes(params[2])
-	}
-
-	// HTMLとして無効な値（null、空文字列）の場合、value属性を出力しない
-	valueAttr := ""
-	if value != "" {
-		rawValue := strings.TrimSpace(value)
-		if rawValue != "null" && rawValue != "''" && rawValue != `""` {
-			formattedValue := FormatValueAttribute(value)
-			valueAttr = fmt.Sprintf(` value="%s"`, formattedValue)
-		}
-	}
-
-	return fmt.Sprintf(`<input type="number" name="%s"%s%s>`, name, valueAttr, extraAttrs)
-}
-
-// processFormInput は inputs_textual.go に移動
-
-// processFormPassword は inputs_textual.go に移動
-
-// replaceFormInput は inputs_textual.go と連携するためここに残置（動的input）
-
 func processFormInputDynamic(params []string) string {
 	if len(params) < 2 {
 		return ""
@@ -769,16 +695,6 @@ func processFormSubmit(params []string) string {
 	return fmt.Sprintf(`<button type="submit"%s>%s</button>`, extraAttrs, textParam)
 }
 
-// inputs_textual.go へ移動
-
-// inputs_textual.go へ移動
-
-// inputs_textual.go へ移動
-
-// inputs_textual.go へ移動
-
-// inputs_textual.go へ移動
-
 func replaceFormDate(text string) string {
 	// 複雑なネストに対応したパターンに変更
 	// (?s)フラグで改行を含む文字列のマッチを有効化
@@ -842,30 +758,6 @@ func replaceFormDatetime(text string) string {
 				// バランスを考慮したパラメータ抽出に変更
 				params := extractParamsBalanced(paramStr)
 				return processFormInput("datetime-local", params)
-			}
-			return match
-		})
-	}
-	return text
-}
-
-func replaceFormRange(text string) string {
-	// 複雑なネストに対応したパターンに変更
-	// (?s)フラグで改行を含む文字列のマッチを有効化
-	patterns := []string{
-		`(?s)\{\!\!\s*Form::range\(\s*(.*?)\s*\)\s*\!\!\}`,
-		`(?s)\{\{\s*Form::range\(\s*(.*?)\s*\)\s*\}\}`,
-	}
-
-	for _, pattern := range patterns {
-		re := regexCache.GetRegex(pattern)
-		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			fullMatch := re.FindStringSubmatch(match)
-			if len(fullMatch) > 1 {
-				paramStr := fullMatch[1]
-				// バランスを考慮したパラメータ抽出に変更
-				params := extractParamsBalanced(paramStr)
-				return processFormInput("range", params)
 			}
 			return match
 		})
