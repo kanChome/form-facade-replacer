@@ -38,10 +38,10 @@ cd form-facade-replacer
 go mod tidy
 
 # 開発ビルド
-go build -o form_facade_replacer form_facade_replacer.go
+go build -o form-facade-replacer ./cmd/form-facade-replacer
 
 # リリースビルド（バージョン情報付き）
-go build -ldflags "-X main.version=v2.1.0 -X main.buildDate=$(date +'%Y-%m-%d')" -o form_facade_replacer form_facade_replacer.go
+go build -ldflags "-X form-facade-replacer/internal/ffr.version=v2.1.0 -X form-facade-replacer/internal/ffr.buildDate=$(date +'%Y-%m-%d')" -o form-facade-replacer ./cmd/form-facade-replacer
 ```
 
 ## 使用方法
@@ -50,23 +50,23 @@ go build -ldflags "-X main.version=v2.1.0 -X main.buildDate=$(date +'%Y-%m-%d')"
 
 ```bash
 # 単一ファイルを処理
-go run form_facade_replacer.go path/to/file.blade.php
+./form-facade-replacer path/to/file.blade.php
 
 # ディレクトリを再帰的に処理
-go run form_facade_replacer.go path/to/views/directory
+./form-facade-replacer path/to/views/directory
 
 # ヘルプを表示
-go run form_facade_replacer.go --help
+./form-facade-replacer --help
 ```
 
 ### 実行例
 
 ```bash
 # Laravelのviews配下すべてを処理
-go run form_facade_replacer.go resources/views
+./form-facade-replacer resources/views
 
 # 特定のファイルのみ処理
-go run form_facade_replacer.go resources/views/user/create.blade.php
+./form-facade-replacer resources/views/user/create.blade.php
 ```
 
 ## 対応機能
