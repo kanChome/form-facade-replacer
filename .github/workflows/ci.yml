@@ -164,9 +164,9 @@ jobs:
         run: |
           echo "🏗️ Building for ${{ matrix.goos }}/${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            go build -o form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }}.exe .
+            go build -o form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }}.exe ./cmd/form-facade-replacer
           else
-            go build -o form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }} .
+            go build -o form-facade-replacer-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/form-facade-replacer
           fi
 
       - name: Upload build artifacts

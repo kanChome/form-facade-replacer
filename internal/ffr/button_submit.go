@@ -1,0 +1,106 @@
+// button_submit.go: ボタン/サブミット要素の置換ロジック。
+package ffr
+
+import (
+	"fmt"
+	"strings"
+)
+
+// --- Button ---
+// replaceFormButton は Blade 内の Form::button(...) を HTML に置換する。
+func replaceFormButton(text string) string {
+	singleParamPatterns := []string{
+		`(?s)\{\{\s*Form::button\(\s*'([^']*)'\s*\)\s*\}\}`,
+		`(?s)\{\!\!\s*Form::button\(\s*'([^']*)'\s*\)\s*\!\!\}`,
+	}
+	for _, pattern := range singleParamPatterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			matches := re.FindStringSubmatch(match)
+			return processFormButton(matches[1], "")
+		})
+	}
+	twoParamPatterns := []string{
+		`(?s)\{\!\!\s*Form::button\(\s*(.*?)\s*,\s*\[\s*(.*?)\s*\]\s*\)\s*\!\!\}`,
+		`(?s)\{\{\s*Form::button\(\s*(.*?)\s*,\s*\[\s*(.*?)\s*\]\s*\)\s*\}\}`,
+	}
+	for _, pattern := range twoParamPatterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			matches := re.FindStringSubmatch(match)
+			return processFormButton(matches[1], matches[2])
+		})
+	}
+	return text
+}
+
+// processFormButton は button の属性（type/onclick/data- 等）を整形してHTMLを生成する。
+func processFormButton(textParam, attrs string) string {
+	if attrs == "" {
+		return fmt.Sprintf(`<button>{!! %s !!}</button>`, textParam)
+	}
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"type", "onclick", "class", "id", "disabled"},
+		Patterns: map[string]string{
+			"type":     `'type'\s*=>\s*'([^']+)'`,
+			"onclick":  `'onclick'\s*=>\s*'([^']+)'`,
+			"class":    `'class'\s*=>\s*'([^']+)'`,
+			"id":       `'id'\s*=>\s*'([^']+)'`,
+			"disabled": `'disabled'\s*=>\s*'([^']+)'`,
+		},
+	}
+	extraAttrs := attrProcessor.ProcessAttributes(attrs)
+	dataRe := regexCache.GetRegex(`'(data-[^']+)'\s*=>\s*'([^']+)'`)
+	for _, match := range dataRe.FindAllStringSubmatch(attrs, -1) {
+		extraAttrs += fmt.Sprintf(` %s="%s"`, match[1], match[2])
+	}
+	extraAttrs += processDynamicAttributes(attrs)
+	return fmt.Sprintf(`<button%s>{!! %s !!}</button>`, extraAttrs, textParam)
+}
+
+// --- Submit ---
+// replaceFormSubmit は Blade 内の Form::submit(...) を HTML に置換する。
+func replaceFormSubmit(text string) string {
+	patterns := []string{
+		`(?is)\{\!\!\s*Form::submit\(\s*(.*?)\s*\)\s*\!\!\}`,
+		`(?is)\{\{\s*Form::submit\(\s*(.*?)\s*\)\s*\}\}`,
+	}
+	for _, pattern := range patterns {
+		re := regexCache.GetRegex(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			fullMatch := re.FindStringSubmatch(match)
+			if len(fullMatch) > 1 {
+				params := extractParamsBalanced(fullMatch[1])
+				return processFormSubmit(params)
+			}
+			return match
+		})
+	}
+	return text
+}
+
+// processFormSubmit は submit のテキストと属性を整形してHTMLを生成する。
+func processFormSubmit(params []string) string {
+	if len(params) < 1 {
+		return ""
+	}
+	textParam := strings.Trim(params[0], `'"`)
+	if textParam == "null" {
+		textParam = ""
+	}
+	attrProcessor := &AttributeProcessor{
+		Order: []string{"class", "id", "style", "onclick", "disabled"},
+		Patterns: map[string]string{
+			"class":    `'class'\s*=>\s*'([^']+)'`,
+			"id":       `'id'\s*=>\s*'([^']+)'`,
+			"style":    `'style'\s*=>\s*'([^']+)'`,
+			"onclick":  `'onclick'\s*=>\s*'([^']+)'`,
+			"disabled": `'disabled'\s*=>\s*'([^']*)'`,
+		},
+	}
+	extraAttrs := ""
+	if len(params) > 1 {
+		extraAttrs = attrProcessor.ProcessAttributes(params[1])
+	}
+	return fmt.Sprintf(`<button type="submit"%s>%s</button>`, extraAttrs, textParam)
+}

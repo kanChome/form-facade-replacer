@@ -70,9 +70,9 @@ jobs:
 
           # Build with optimization and version info
           go build \
-            -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }} -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -ldflags="-s -w -X form-facade-replacer/internal/ffr.version=${{ steps.version.outputs.VERSION }} -X form-facade-replacer/internal/ffr.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -o "${BINARY_NAME}" \
-            .
+            ./cmd/form-facade-replacer
 
           echo "✅ Built: ${BINARY_NAME}"
           ls -la "${BINARY_NAME}"

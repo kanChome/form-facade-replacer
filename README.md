@@ -38,10 +38,10 @@ cd form-facade-replacer
 go mod tidy
 
 # Development build
-go build -o form_facade_replacer form_facade_replacer.go
+go build -o form-facade-replacer ./cmd/form-facade-replacer
 
 # Release build (with version information)
-go build -ldflags "-X main.version=v2.1.0 -X main.buildDate=$(date +'%Y-%m-%d')" -o form_facade_replacer form_facade_replacer.go
+go build -ldflags "-X form-facade-replacer/internal/ffr.version=v2.1.0 -X form-facade-replacer/internal/ffr.buildDate=$(date +'%Y-%m-%d')" -o form-facade-replacer ./cmd/form-facade-replacer
 ```
 
 ## Usage
@@ -50,26 +50,26 @@ go build -ldflags "-X main.version=v2.1.0 -X main.buildDate=$(date +'%Y-%m-%d')"
 
 ```bash
 # Process a single file
-go run form_facade_replacer.go path/to/file.blade.php
+./form-facade-replacer path/to/file.blade.php
 
 # Process a directory recursively
-go run form_facade_replacer.go path/to/views/directory
+./form-facade-replacer path/to/views/directory
 
 # Display help
-go run form_facade_replacer.go --help
+./form-facade-replacer --help
 
 # Show version information
-go run form_facade_replacer.go --version
+./form-facade-replacer --version
 ```
 
 ### Usage Examples
 
 ```bash
 # Process all files in Laravel's views directory
-go run form_facade_replacer.go resources/views
+./form-facade-replacer resources/views
 
 # Process a specific file only
-go run form_facade_replacer.go resources/views/user/create.blade.php
+./form-facade-replacer resources/views/user/create.blade.php
 ```
 
 ## Supported Features
