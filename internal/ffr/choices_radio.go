@@ -2,8 +2,8 @@
 package ffr
 
 import (
-    "fmt"
-    "strings"
+	"fmt"
+	"strings"
 )
 
 // --- Radio ---

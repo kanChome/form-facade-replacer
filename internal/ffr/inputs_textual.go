@@ -2,7 +2,7 @@
 package ffr
 
 import (
-    "fmt"
+	"fmt"
 )
 
 // --- Text ---

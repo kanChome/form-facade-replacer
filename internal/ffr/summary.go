@@ -2,12 +2,12 @@
 package ffr
 
 import (
-    "fmt"
-    "io/fs"
-    "os"
-    "path/filepath"
-    "sort"
-    "strings"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 )
 
 // printSummary は処理件数・処理済みファイルと残存Form::パターンを表示する。

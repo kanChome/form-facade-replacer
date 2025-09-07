@@ -2,16 +2,16 @@
 package ffr
 
 import (
-    "fmt"
-    "os"
-    "strings"
+	"fmt"
+	"os"
+	"strings"
 )
 
 // バージョン情報（リリース時にldフラグで設定される）
 // バージョン情報（ldflagsで上書きされる）
 var (
-    version   = "dev"
-    buildDate = "unknown"
+	version   = "dev"
+	buildDate = "unknown"
 )
 
 // --- Meta (usage/version) ---
@@ -45,13 +45,13 @@ func printVersion() {
 // --- Dynamic Attributes ---
 // DynamicAttributePair は動的属性のキーと値のペアを表す。
 type DynamicAttributePair struct {
-    Key   string // 動的キー（例: $condition ? 'disabled' : ''）
-    Value string // 動的値（例: $condition ? 'disabled' : null）
+	Key   string // 動的キー（例: $condition ? 'disabled' : ''）
+	Value string // 動的値（例: $condition ? 'disabled' : null）
 }
 
 // detectDynamicAttributes は文字列から動的属性を抽出して配列で返す。
 func detectDynamicAttributes(attrs string) []DynamicAttributePair {
-    return extractDynamicAttributesBalanced(attrs)
+	return extractDynamicAttributesBalanced(attrs)
 }
 
 // extractDynamicAttributesBalanced はカンマ分割時に括弧/クォートのバランスを考慮して抽出する。

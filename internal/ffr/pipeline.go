@@ -2,12 +2,12 @@
 package ffr
 
 import (
-    "bufio"
-    "fmt"
-    "io/fs"
-    "os"
-    "path/filepath"
-    "strings"
+	"bufio"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type ReplacementConfig struct {
