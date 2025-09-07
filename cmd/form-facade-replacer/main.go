@@ -1,12 +1,11 @@
 package main
 
 import (
-    "os"
+	"os"
 
-    "form-facade-replacer/internal/ffr"
+	"form-facade-replacer/internal/ffr"
 )
 
 func main() {
-    os.Exit(ffr.Run(os.Args))
+	os.Exit(ffr.Run(os.Args))
 }
-
